@@ -1,0 +1,6 @@
+.env
+.env.rtf
+*.svg
+*.png
+*.pptx
+*.docx
