@@ -14,6 +14,15 @@ const firebaseConfig = {
   // Initialize Firebase Authentication
   const auth = firebase.auth();
 
+  // Track the current user
+let currentUser = null;
+
+// Listen for authentication state changes
+auth.onAuthStateChanged(user => {
+    currentUser = user;
+    console.log('Auth state changed: currentUser =', user ? user.email : 'null');
+});
+
 const svg = document.getElementById('main-svg');
 const block = document.getElementById('block');
 const input = document.getElementById('connection-input');
@@ -1083,12 +1092,65 @@ document.getElementById('how-to-play-button').addEventListener('click', () => {
 document.getElementById('profile-button').addEventListener('click', () => {
     const popup = document.createElement('div');
     popup.className = 'popup';
-    popup.innerHTML = `
-        <p>Profile</p>
-        <p>Content to be added later.</p>
-        <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
-    `;
-    popup.querySelector('button').addEventListener('click', () => popup.remove());
+    
+    if (!currentUser) {
+        // User is not signed in; show sign-up form
+        popup.innerHTML = `
+            <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Create Profile</p>
+            <div style="text-align: left; padding: 0 20px;">
+                <label for="signup-email">Email:</label><br>
+                <input type="email" id="signup-email" style="width: 100%; margin-bottom: 10px; padding: 5px;" placeholder="Enter your email"><br>
+                <label for="signup-password">Password:</label><br>
+                <input type="password" id="signup-password" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter your password"><br>
+            </div>
+            <button id="signup-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Sign Up</button>
+            <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
+        `;
+        
+        // Add event listener for sign-up button
+        popup.querySelector('#signup-button').addEventListener('click', () => {
+            const email = popup.querySelector('#signup-email').value;
+            const password = popup.querySelector('#signup-password').value;
+            
+            if (!email || !password) {
+                alert('Please enter both email and password.');
+                return;
+            }
+            
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    console.log('User signed up:', userCredential.user.email);
+                    popup.remove();
+                })
+                .catch(error => {
+                    console.error('Sign-up error:', error.message);
+                    alert(`Error: ${error.message}`);
+                });
+        });
+    } else {
+        // User is signed in; show their email
+        popup.innerHTML = `
+            <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Profile</p>
+            <p>Email: <span style="color: #6273B4;">${currentUser.email}</span></p>
+            <button id="signout-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; margin-bottom: 10px;">Sign Out</button>
+            <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
+        `;
+        
+        // Add event listener for sign-out button
+        popup.querySelector('#signout-button').addEventListener('click', () => {
+            auth.signOut()
+                .then(() => {
+                    console.log('User signed out');
+                    popup.remove();
+                })
+                .catch(error => {
+                    console.error('Sign-out error:', error.message);
+                    alert(`Error: ${error.message}`);
+                });
+        });
+    }
+    
+    popup.querySelector('button:last-child').addEventListener('click', () => popup.remove());
     document.body.appendChild(popup);
 });
 
