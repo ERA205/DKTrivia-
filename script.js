@@ -14,6 +14,9 @@ const firebaseConfig = {
   // Initialize Firebase Authentication
   const auth = firebase.auth();
 
+  // Initialize Firestore
+const db = firebase.firestore();
+
   // Track the current user
 let currentUser = null;
 
@@ -23,6 +26,10 @@ auth.onAuthStateChanged(user => {
     console.log('Auth state changed: currentUser =', user ? user.email : 'null');
 });
 
+// Generate a unique identifier for anonymous users
+function generateUniqueId() {
+    return crypto.randomUUID();
+}
 const svg = document.getElementById('main-svg');
 const block = document.getElementById('block');
 const input = document.getElementById('connection-input');
@@ -954,118 +961,182 @@ input.addEventListener('keydown', async (e) => {
         displayMainImage(subjectTitle);
 
         // Check if block limit is reached
-        if (allBlocks.length === 11) {
-            const popup = document.createElement('div');
-            popup.style.position = 'fixed';
+        // Check if block limit is reached
+if (allBlocks.length === 11) {
+    // Hide the text input box
+    input.style.display = 'none';
+    console.log('Game over: Text input box hidden');
+
+    // Generate a unique identifier for anonymous users
+    const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
+    const isAnonymous = !currentUser;
+    const initialBlockTitle = gameCsvData[0].article; // Initial block title (e.g., "Paris")
+
+    // Save game data to Firestore
+    const gameData = {
+        userIdentifier: userIdentifier,
+        isAnonymous: isAnonymous,
+        score: totalScore,
+        initialBlock: initialBlockTitle,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    let gameSessionId;
+    await db.collection('gameSessions').add(gameData)
+        .then(docRef => {
+            gameSessionId = docRef.id;
+            console.log('Game session saved to Firestore with ID:', gameSessionId);
+        })
+        .catch(error => {
+            console.error('Error saving game session to Firestore:', error);
+        });
+
+    // Calculate percentile
+    let percentile = 0;
+    const allScores = [];
+    await db.collection('gameSessions')
+        .get()
+        .then(querySnapshot => {
+            querySnapshot.forEach(doc => {
+                allScores.push(doc.data().score);
+            });
+            allScores.sort((a, b) => a - b);
+            const index = allScores.indexOf(totalScore);
+            percentile = index >= 0 ? ((index / allScores.length) * 100).toFixed(1) : 0;
+            console.log(`Score: ${totalScore}, Percentile: ${percentile}%`);
+        })
+        .catch(error => {
+            console.error('Error fetching scores for percentile:', error);
+            percentile = 'N/A';
+        });
+
+    // For logged-in users, save the percentile in the game session
+    if (currentUser && gameSessionId) {
+        await db.collection('gameSessions').doc(gameSessionId).update({
+            percentile: percentile
+        })
+        .then(() => {
+            console.log('Percentile saved for logged-in user:', percentile);
+        })
+        .catch(error => {
+            console.error('Error saving percentile:', error);
+        });
+    }
+
+    const popup = document.createElement('div');
+    popup.style.position = 'fixed';
+    popup.style.top = '50%';
+    popup.style.left = '50%';
+    popup.style.transform = 'translate(-50%, -50%)';
+    popup.style.backgroundColor = '#fff';
+    popup.style.border = '2px solid #6273B4';
+    popup.style.padding = '20px';
+    popup.style.borderRadius = '10px';
+    popup.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+    popup.style.zIndex = '1000';
+    popup.style.fontFamily = 'Arial, sans-serif';
+    popup.style.fontSize = '16px';
+    popup.style.textAlign = 'center';
+    popup.style.transition = 'all 0.3s ease-in-out';
+
+    const message = document.createElement('p');
+    message.textContent = 'Game Over';
+    message.style.margin = '0 0 10px 0';
+    popup.appendChild(message);
+
+    // Add total score and percentile display
+    const scoreText = document.createElement('p');
+    scoreText.style.margin = '0 0 5px 0';
+    scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
+    popup.appendChild(scoreText);
+
+    const percentileText = document.createElement('p');
+    percentileText.style.margin = '0 0 15px 0';
+    percentileText.innerHTML = `Percentile: <span style="color: #6273B4;">${percentile}%</span>`;
+    popup.appendChild(percentileText);
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.gap = '10px';
+    buttonContainer.style.justifyContent = 'center';
+
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Reset Game';
+    resetButton.style.backgroundColor = '#6273B4';
+    resetButton.style.color = '#fff';
+    resetButton.style.border = 'none';
+    resetButton.style.padding = '10px 20px';
+    resetButton.style.borderRadius = '5px';
+    resetButton.style.cursor = 'pointer';
+    resetButton.addEventListener('click', async () => {
+        await resetGame();
+        popup.remove();
+    });
+    buttonContainer.appendChild(resetButton);
+
+    const reviewButton = document.createElement('button');
+    reviewButton.textContent = 'Review Game';
+    reviewButton.style.backgroundColor = '#6273B4';
+    reviewButton.style.color = '#fff';
+    reviewButton.style.border = 'none';
+    reviewButton.style.padding = '10px 20px';
+    reviewButton.style.borderRadius = '5px';
+    reviewButton.style.cursor = 'pointer';
+    let isMinimized = false;
+
+    const minimizePopup = () => {
+        try {
+            popup.style.top = 'auto';
+            popup.style.bottom = '10px';
+            popup.style.left = '50%';
+            popup.style.transform = 'translateX(-50%)';
+            popup.style.width = '200px';
+            popup.style.padding = '10px';
+            popup.style.minHeight = 'auto';
+            message.textContent = 'Game Over - Click to Expand';
+            scoreText.style.display = 'none';
+            percentileText.style.display = 'none';
+            buttonContainer.style.display = 'none';
+            isMinimized = true;
+            console.log('Popup minimized');
+        } catch (error) {
+            console.error('Error minimizing popup:', error);
+        }
+    };
+
+    const expandPopup = () => {
+        try {
             popup.style.top = '50%';
+            popup.style.bottom = 'auto';
             popup.style.left = '50%';
             popup.style.transform = 'translate(-50%, -50%)';
-            popup.style.backgroundColor = '#fff';
-            popup.style.border = '2px solid #6273B4';
+            popup.style.width = 'auto';
             popup.style.padding = '20px';
-            popup.style.borderRadius = '10px';
-            popup.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-            popup.style.zIndex = '1000';
-            popup.style.fontFamily = 'Arial, sans-serif';
-            popup.style.fontSize = '16px';
-            popup.style.textAlign = 'center';
-            popup.style.transition = 'all 0.3s ease-in-out';
-
-            // Hide the text input box
-            input.style.display = 'none';
-            console.log('Game over: Text input box hidden');
-
-            const message = document.createElement('p');
+            popup.style.minHeight = 'auto';
             message.textContent = 'Game Over';
-            message.style.margin = '0 0 10px 0';
-            popup.appendChild(message);
-
-            // Add total score display
-            const scoreText = document.createElement('p');
-            scoreText.style.margin = '0 0 15px 0';
-            scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
-            popup.appendChild(scoreText);
-
-            const buttonContainer = document.createElement('div');
+            scoreText.style.display = 'block';
+            percentileText.style.display = 'block';
             buttonContainer.style.display = 'flex';
-            buttonContainer.style.gap = '10px';
-            buttonContainer.style.justifyContent = 'center';
-
-            const resetButton = document.createElement('button');
-            resetButton.textContent = 'Reset Game';
-            resetButton.style.backgroundColor = '#6273B4';
-            resetButton.style.color = '#fff';
-            resetButton.style.border = 'none';
-            resetButton.style.padding = '10px 20px';
-            resetButton.style.borderRadius = '5px';
-            resetButton.style.cursor = 'pointer';
-            resetButton.addEventListener('click', async () => {
-                await resetGame();
-                popup.remove();
-            });
-            buttonContainer.appendChild(resetButton);
-
-            const reviewButton = document.createElement('button');
-            reviewButton.textContent = 'Review Game';
-            reviewButton.style.backgroundColor = '#6273B4';
-            reviewButton.style.color = '#fff';
-            resetButton.style.border = 'none';
-            reviewButton.style.padding = '10px 20px';
-            reviewButton.style.borderRadius = '5px';
-            reviewButton.style.cursor = 'pointer';
-            let isMinimized = false;
-
-            const minimizePopup = () => {
-                try {
-                    popup.style.top = 'auto';
-                    popup.style.bottom = '10px';
-                    popup.style.left = '50%';
-                    popup.style.transform = 'translateX(-50%)';
-                    popup.style.width = '200px';
-                    popup.style.padding = '10px';
-                    popup.style.minHeight = 'auto';
-                    message.textContent = 'Game Over - Click to Expand';
-                    scoreText.style.display = 'none'; // Hide score when minimized
-                    buttonContainer.style.display = 'none';
-                    isMinimized = true;
-                    console.log('Popup minimized');
-                } catch (error) {
-                    console.error('Error minimizing popup:', error);
-                }
-            };
-
-            const expandPopup = () => {
-                try {
-                    popup.style.top = '50%';
-                    popup.style.bottom = 'auto';
-                    popup.style.left = '50%';
-                    popup.style.transform = 'translate(-50%, -50%)';
-                    popup.style.width = 'auto';
-                    popup.style.padding = '20px';
-                    popup.style.minHeight = 'auto';
-                    message.textContent = 'Game Over';
-                    scoreText.style.display = 'block'; // Show score when expanded
-                    buttonContainer.style.display = 'flex';
-                    isMinimized = false;
-                    console.log('Popup expanded');
-                } catch (error) {
-                    console.error('Error expanding popup:', error);
-                }
-            };
-
-            reviewButton.addEventListener('click', minimizePopup);
-
-            popup.addEventListener('click', (event) => {
-                if (isMinimized && event.target === popup) {
-                    expandPopup();
-                }
-            });
-
-            buttonContainer.appendChild(reviewButton);
-            popup.appendChild(buttonContainer);
-
-            document.body.appendChild(popup);
+            isMinimized = false;
+            console.log('Popup expanded');
+        } catch (error) {
+            console.error('Error expanding popup:', error);
         }
+    };
+
+    reviewButton.addEventListener('click', minimizePopup);
+
+    popup.addEventListener('click', (event) => {
+        if (isMinimized && event.target === popup) {
+            expandPopup();
+        }
+    });
+
+    buttonContainer.appendChild(reviewButton);
+    popup.appendChild(buttonContainer);
+
+    document.body.appendChild(popup);
+}
     }
 });
 // Handle banner button popups
@@ -1128,13 +1199,46 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 });
         });
     } else {
-        // User is signed in; show their email
+        // User is signed in; fetch and display game history
         popup.innerHTML = `
             <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Profile</p>
             <p>Email: <span style="color: #6273B4;">${currentUser.email}</span></p>
+            <p style="font-weight: bold; margin-top: 15px;">Game History:</p>
+            <div id="game-history" style="text-align: left; padding: 0 20px; max-height: 150px; overflow-y: auto;"></div>
             <button id="signout-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; margin-bottom: 10px;">Sign Out</button>
             <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
         `;
+        
+        // Fetch game history from Firestore
+        db.collection('gameSessions')
+            .where('userIdentifier', '==', currentUser.uid)
+            .orderBy('timestamp', 'desc')
+            .limit(5) // Limit to the 5 most recent games
+            .get()
+            .then(querySnapshot => {
+                const gameHistoryDiv = popup.querySelector('#game-history');
+                if (querySnapshot.empty) {
+                    gameHistoryDiv.innerHTML = '<p>No games played yet.</p>';
+                } else {
+                    querySnapshot.forEach(doc => {
+                        const data = doc.data();
+                        const timestamp = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Unknown date';
+                        const percentile = data.percentile !== undefined ? data.percentile : 'N/A';
+                        gameHistoryDiv.innerHTML += `
+                            <p style="margin: 5px 0;">
+                                Score: <span style="color: #6273B4;">${data.score}</span> 
+                                (Percentile: <span style="color: #6273B4;">${percentile}%</span>, 
+                                Initial Block: ${data.initialBlock}, 
+                                Played on ${timestamp})
+                            </p>
+                        `;
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching game history:', error);
+                popup.querySelector('#game-history').innerHTML = '<p>Error loading game history.</p>';
+            });
         
         // Add event listener for sign-out button
         popup.querySelector('#signout-button').addEventListener('click', () => {
