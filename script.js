@@ -1249,12 +1249,23 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 });
         });
     } else {
-        // User is signed in; fetch and display game history
+        // User is signed in; fetch and display game history in a table
         popup.innerHTML = `
             <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Profile</p>
             <p>Email: <span style="color: #6273B4;">${currentUser.email}</span></p>
             <p style="font-weight: bold; margin-top: 15px;">Game History:</p>
-            <div id="game-history" style="text-align: left; padding: 0 20px; max-height: 150px; overflow-y: auto;"></div>
+            <div style="max-height: 150px; overflow-y: auto; padding: 0 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Rank</th>
+                            <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Score</th>
+                            <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="game-history"></tbody>
+                </table>
+            </div>
             <button id="signout-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; margin-bottom: 10px;">Sign Out</button>
             <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
         `;
@@ -1266,29 +1277,35 @@ document.getElementById('profile-button').addEventListener('click', () => {
             .limit(5) // Limit to the 5 most recent games
             .get()
             .then(querySnapshot => {
-                const gameHistoryDiv = popup.querySelector('#game-history');
+                const gameHistoryBody = popup.querySelector('#game-history');
                 if (querySnapshot.empty) {
-                    gameHistoryDiv.innerHTML = '<p>No games played yet.</p>';
+                    gameHistoryBody.innerHTML = `
+                        <tr>
+                            <td colspan="3" style="padding: 5px; text-align: center;">No games played yet.</td>
+                        </tr>
+                    `;
                 } else {
                     querySnapshot.forEach(doc => {
                         const data = doc.data();
                         const timestamp = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Unknown date';
                         const rank = data.rank !== undefined ? data.rank : 'N/A';
-                        const totalEntries = data.totalEntriesForTopic !== undefined ? data.totalEntriesForTopic : 'N/A';
-                        gameHistoryDiv.innerHTML += `
-                            <p style="margin: 5px 0;">
-                                Score: <span style="color: #6273B4;">${data.score}</span> 
-                                (Rank: <span style="color: #6273B4;">${rank}</span> out of <span style="color: #6273B4;">${totalEntries}</span>, 
-                                Initial Block: ${data.initialBlock}, 
-                                Played on ${timestamp})
-                            </p>
+                        gameHistoryBody.innerHTML += `
+                            <tr>
+                                <td style="padding: 5px;">${rank}</td>
+                                <td style="padding: 5px;">${data.score}</td>
+                                <td style="padding: 5px;">${timestamp}</td>
+                            </tr>
                         `;
                     });
                 }
             })
             .catch(error => {
                 console.error('Error fetching game history:', error);
-                popup.querySelector('#game-history').innerHTML = '<p>Error loading game history.</p>';
+                popup.querySelector('#game-history').innerHTML = `
+                    <tr>
+                        <td colspan="3" style="padding: 5px; text-align: center;">Error loading game history.</td>
+                    </tr>
+                `;
             });
         
         // Add event listener for sign-out button
