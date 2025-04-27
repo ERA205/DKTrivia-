@@ -1165,23 +1165,24 @@ document.getElementById('profile-button').addEventListener('click', () => {
     popup.className = 'popup';
     
     if (!currentUser) {
-        // User is not signed in; show sign-up form
+        // User is not signed in; show sign-up and login form
         popup.innerHTML = `
-            <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Create Profile</p>
+            <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Profile</p>
             <div style="text-align: left; padding: 0 20px;">
-                <label for="signup-email">Email:</label><br>
-                <input type="email" id="signup-email" style="width: 100%; margin-bottom: 10px; padding: 5px;" placeholder="Enter your email"><br>
-                <label for="signup-password">Password:</label><br>
-                <input type="password" id="signup-password" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter your password"><br>
+                <label for="auth-email">Email:</label><br>
+                <input type="email" id="auth-email" style="width: 100%; margin-bottom: 10px; padding: 5px;" placeholder="Enter your email"><br>
+                <label for="auth-password">Password:</label><br>
+                <input type="password" id="auth-password" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter your password"><br>
             </div>
             <button id="signup-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Sign Up</button>
+            <button id="login-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px; margin-left: 10px;">Log In</button>
             <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
         `;
         
         // Add event listener for sign-up button
         popup.querySelector('#signup-button').addEventListener('click', () => {
-            const email = popup.querySelector('#signup-email').value;
-            const password = popup.querySelector('#signup-password').value;
+            const email = popup.querySelector('#auth-email').value;
+            const password = popup.querySelector('#auth-password').value;
             
             if (!email || !password) {
                 alert('Please enter both email and password.');
@@ -1195,6 +1196,27 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 })
                 .catch(error => {
                     console.error('Sign-up error:', error.message);
+                    alert(`Error: ${error.message}`);
+                });
+        });
+
+        // Add event listener for login button
+        popup.querySelector('#login-button').addEventListener('click', () => {
+            const email = popup.querySelector('#auth-email').value;
+            const password = popup.querySelector('#auth-password').value;
+            
+            if (!email || !password) {
+                alert('Please enter both email and password.');
+                return;
+            }
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    console.log('User logged in:', userCredential.user.email);
+                    popup.remove();
+                })
+                .catch(error => {
+                    console.error('Login error:', error.message);
                     alert(`Error: ${error.message}`);
                 });
         });
