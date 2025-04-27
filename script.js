@@ -961,7 +961,8 @@ input.addEventListener('keydown', async (e) => {
         displayMainImage(subjectTitle);
 
         // Check if block limit is reached
-        // Check if block limit is reached
+    
+
 if (allBlocks.length === 11) {
     // Hide the text input box
     input.style.display = 'none';
@@ -991,7 +992,7 @@ if (allBlocks.length === 11) {
             console.error('Error saving game session to Firestore:', error);
         });
 
-    // Calculate percentile
+    // Calculate percentile (existing)
     let percentile = 0;
     const allScores = [];
     await db.collection('gameSessions')
@@ -1010,16 +1011,43 @@ if (allBlocks.length === 11) {
             percentile = 'N/A';
         });
 
-    // For logged-in users, save the percentile in the game session
-    if (currentUser && gameSessionId) {
-        await db.collection('gameSessions').doc(gameSessionId).update({
-            percentile: percentile
-        })
-        .then(() => {
-            console.log('Percentile saved for logged-in user:', percentile);
+    // Calculate rank for the current topic
+    let rank = 0;
+    let totalEntriesForTopic = 0;
+    const topicScores = [];
+    await db.collection('gameSessions')
+        .where('initialBlock', '==', initialBlockTitle)
+        .get()
+        .then(querySnapshot => {
+            querySnapshot.forEach(doc => {
+                topicScores.push(doc.data().score);
+            });
+            topicScores.sort((a, b) => b - a); // Sort in descending order (highest to lowest)
+            totalEntriesForTopic = topicScores.length;
+            rank = topicScores.indexOf(totalScore) + 1; // Rank is 1-based (1st, 2nd, etc.)
+            if (rank === 0) { // If the score isn't found (e.g., due to duplicates), find the first occurrence
+                rank = topicScores.findIndex(score => score <= totalScore) + 1;
+            }
+            console.log(`Score: ${totalScore}, Rank: ${rank} out of ${totalEntriesForTopic} for topic ${initialBlockTitle}`);
         })
         .catch(error => {
-            console.error('Error saving percentile:', error);
+            console.error('Error fetching scores for ranking:', error);
+            rank = 'N/A';
+            totalEntriesForTopic = 'N/A';
+        });
+
+    // For logged-in users, save the percentile and rank in the game session
+    if (currentUser && gameSessionId) {
+        await db.collection('gameSessions').doc(gameSessionId).update({
+            percentile: percentile,
+            rank: rank,
+            totalEntriesForTopic: totalEntriesForTopic
+        })
+        .then(() => {
+            console.log('Percentile and rank saved for logged-in user:', percentile, rank);
+        })
+        .catch(error => {
+            console.error('Error saving percentile and rank:', error);
         });
     }
 
@@ -1044,16 +1072,16 @@ if (allBlocks.length === 11) {
     message.style.margin = '0 0 10px 0';
     popup.appendChild(message);
 
-    // Add total score and percentile display
+    // Add total score and rank display
     const scoreText = document.createElement('p');
     scoreText.style.margin = '0 0 5px 0';
     scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
     popup.appendChild(scoreText);
 
-    const percentileText = document.createElement('p');
-    percentileText.style.margin = '0 0 15px 0';
-    percentileText.innerHTML = `Percentile: <span style="color: #6273B4;">${percentile}%</span>`;
-    popup.appendChild(percentileText);
+    const rankText = document.createElement('p');
+    rankText.style.margin = '0 0 15px 0';
+    rankText.innerHTML = `Your score ranks <span style="color: #6273B4;">${rank}</span> out of <span style="color: #6273B4;">${totalEntriesForTopic}</span> for this topic`;
+    popup.appendChild(rankText);
 
     const buttonContainer = document.createElement('div');
     buttonContainer.style.display = 'flex';
@@ -1095,7 +1123,7 @@ if (allBlocks.length === 11) {
             popup.style.minHeight = 'auto';
             message.textContent = 'Game Over - Click to Expand';
             scoreText.style.display = 'none';
-            percentileText.style.display = 'none';
+            rankText.style.display = 'none';
             buttonContainer.style.display = 'none';
             isMinimized = true;
             console.log('Popup minimized');
@@ -1115,7 +1143,7 @@ if (allBlocks.length === 11) {
             popup.style.minHeight = 'auto';
             message.textContent = 'Game Over';
             scoreText.style.display = 'block';
-            percentileText.style.display = 'block';
+            rankText.style.display = 'block';
             buttonContainer.style.display = 'flex';
             isMinimized = false;
             console.log('Popup expanded');
@@ -1245,11 +1273,12 @@ document.getElementById('profile-button').addEventListener('click', () => {
                     querySnapshot.forEach(doc => {
                         const data = doc.data();
                         const timestamp = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Unknown date';
-                        const percentile = data.percentile !== undefined ? data.percentile : 'N/A';
+                        const rank = data.rank !== undefined ? data.rank : 'N/A';
+                        const totalEntries = data.totalEntriesForTopic !== undefined ? data.totalEntriesForTopic : 'N/A';
                         gameHistoryDiv.innerHTML += `
                             <p style="margin: 5px 0;">
                                 Score: <span style="color: #6273B4;">${data.score}</span> 
-                                (Percentile: <span style="color: #6273B4;">${percentile}%</span>, 
+                                (Rank: <span style="color: #6273B4;">${rank}</span> out of <span style="color: #6273B4;">${totalEntries}</span>, 
                                 Initial Block: ${data.initialBlock}, 
                                 Played on ${timestamp})
                             </p>
