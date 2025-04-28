@@ -31,7 +31,7 @@ function generateUniqueId() {
     return crypto.randomUUID();
 }
 const svg = document.getElementById('main-svg');
-const block = document.getElementById('block');
+//const block = document.getElementById('block');
 const input = document.getElementById('connection-input');
 const gameWindow = document.getElementById('game-window');
 
@@ -44,14 +44,18 @@ blockGroup.setAttribute('id', 'block-group');
 // Append groups to SVG and move initial block to blockGroup
 svg.appendChild(lineGroup);
 svg.appendChild(blockGroup);
-blockGroup.appendChild(block);
+//blockGroup.appendChild(block);
 
-let isDragging = false;
-let startX, startY;
-let viewBox = { minX: 0, minY: 0, width: 10000, height: 10000 };
+// Global game variables
+let allBlocks = [];
 let usedAngles = [];
-let topicBlock = block;
-const allBlocks = [block];
+let totalScore = 0;
+let lastBlockPoints = 0;
+let topicBlock = null;
+let gameCsvData = [];
+let movableBlock = null; // For tracking the block being dragged
+
+
 // Fetch topics from Firestore
 let topics = [];
 async function loadTopics() {
@@ -64,7 +68,7 @@ async function loadTopics() {
     } catch (error) {
         console.error('Error loading topics from Firestore:', error);
         // Fallback to a default topic if Firestore fails
-        topics = ["Paris"];
+        topics = ["Photosynthesis"];
     }
 }
 // Function to get the daily topic
@@ -94,13 +98,13 @@ async function getDailyTopic() {
         const wikiTitle = await getWikipediaArticleTitle(topicName);
         if (!wikiTitle) {
             console.error(`No matching Wikipedia article found for topic: ${topicName}`);
-            return "Paris"; // Fallback to a default topic
+            return "Photosynthesis"; // Fallback to a default topic
         }
         console.log(`Wikipedia article title for ${topicName}: ${wikiTitle}`);
         return wikiTitle;
     } catch (error) {
         console.error(`Error matching Wikipedia article for ${topicName}:`, error);
-        return "Paris"; // Fallback to a default topic
+        return "Photosynthesis"; // Fallback to a default topic
     }
 }
 // Set the initial topic for the game
@@ -126,16 +130,13 @@ getDailyTopic().then(topic => {
 }).catch(error => {
     console.error('Error setting daily topic:', error);
     // Fallback to a default topic if loading fails
-    dailyTopic = "Paris";
-    let allBlocks = [];
-    let usedAngles = [];
-    let totalScore = 0;
-    let lastBlockPoints = 0;
-    let topicBlock;
-    let gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
+    dailyTopic = "Photosynthesis";
+    gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     const initialBlock = createNewBlock(dailyTopic);
     topicBlock = initialBlock;
     allBlocks.push(initialBlock);
+    blockGroup.appendChild(initialBlock);
+    displayMainImage(dailyTopic);
 });
 
 
@@ -496,7 +497,7 @@ function updateConnectedLines(block) {
 
 async function resetGame() {
     // Clear all blocks except the initial one
-    const initialBlock = allBlocks[0]; // Keep "Paris"
+    const initialBlock = allBlocks[0];
     allBlocks.length = 1; // Reset array to only initial block
     allBlocks[0] = initialBlock;
     
@@ -514,7 +515,7 @@ async function resetGame() {
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     
     // Update initial block views and display
-    const viewsStr = await fetchAverageMonthlyViews('Paris');
+    const viewsStr = await fetchAverageMonthlyViews(dailyTopic);
     const views = viewsStr !== 'N/A' ? parseFloat(viewsStr.replace(/,/g, '')) : 0;
     gameCsvData[0].views = views;
     console.log('Game reset, CSV initialized:', generateCsvContent());
@@ -1051,7 +1052,7 @@ if (allBlocks.length === 11) {
     // Generate a unique identifier for anonymous users
     const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
     const isAnonymous = !currentUser;
-    const initialBlockTitle = gameCsvData[0].article; // Initial block title (e.g., "Paris")
+    const initialBlockTitle = gameCsvData[0].article; 
 
     // Save game data to Firestore
     const gameData = {
@@ -1460,5 +1461,3 @@ svg.addEventListener('click', (e) => {
     }
 });
 
-// Initialize with the main image for the initial block
-displayMainImage('Paris');
