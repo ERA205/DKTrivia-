@@ -40,7 +40,7 @@ lineGroup.setAttribute('id', 'line-group');
 const blockGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 blockGroup.setAttribute('id', 'block-group');
 
-// Append groups to SVG and move initial block to blockGroup
+// Append groups to SVG
 svg.appendChild(lineGroup);
 svg.appendChild(blockGroup);
 
@@ -54,6 +54,10 @@ let topicBlock = null;
 let gameCsvData = [];
 let movableBlock = null; // For tracking the block being dragged
 
+// Canvas dragging variables
+let isDragging = false;
+let startX, startY;
+let viewBox = { minX: 0, minY: 0, width: 10000, height: 10000 };
 
 // Fetch topics from Firestore
 let topics = [];
@@ -111,11 +115,8 @@ let dailyTopic;
 getDailyTopic().then(topic => {
     dailyTopic = topic;
     console.log('Daily topic:', dailyTopic);
-
-  
-
     // Initialize game CSV data with the daily topic
-    let gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
+    gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
 
     // Create the initial block with the daily topic
     const initialBlock = createNewBlock(dailyTopic);
@@ -1474,14 +1475,7 @@ svg.addEventListener('mousemove', (e) => {
     updateViewBox();
 });
 
-block.addEventListener('click', () => {
-    topicBlock = block;
-    updateBlockStrokes();
-    viewBox.minX = 5000 - viewBox.width / 2;
-    viewBox.minY = 5000 - viewBox.height / 2;
-    updateViewBox();
-    displayMainImage(block.querySelector('text').textContent);
-});
+
 
 // Exit movable state on SVG click (outside blocks)
 svg.addEventListener('click', (e) => {
