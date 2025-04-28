@@ -31,7 +31,6 @@ function generateUniqueId() {
     return crypto.randomUUID();
 }
 const svg = document.getElementById('main-svg');
-//const block = document.getElementById('block');
 const input = document.getElementById('connection-input');
 const gameWindow = document.getElementById('game-window');
 
@@ -44,7 +43,7 @@ blockGroup.setAttribute('id', 'block-group');
 // Append groups to SVG and move initial block to blockGroup
 svg.appendChild(lineGroup);
 svg.appendChild(blockGroup);
-//blockGroup.appendChild(block);
+
 
 // Global game variables
 let allBlocks = [];
@@ -113,12 +112,7 @@ getDailyTopic().then(topic => {
     dailyTopic = topic;
     console.log('Daily topic:', dailyTopic);
 
-    // Initial block setup
-    let allBlocks = [];
-    let usedAngles = [];
-    let totalScore = 0;
-    let lastBlockPoints = 0;
-    let topicBlock;
+  
 
     // Initialize game CSV data with the daily topic
     let gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
@@ -127,6 +121,24 @@ getDailyTopic().then(topic => {
     const initialBlock = createNewBlock(dailyTopic);
     topicBlock = initialBlock;
     allBlocks.push(initialBlock);
+    blockGroup.appendChild(initialBlock);
+
+    // Apply hover effect to the initial block
+    addHoverEffect(initialBlock);
+
+    // Display the main image for the initial block
+    displayMainImage(dailyTopic);
+
+    // Set up click handler for the initial block
+    initialBlock.addEventListener('click', () => {
+        topicBlock = initialBlock;
+        updateBlockStrokes();
+        viewBox.minX = 5000 - viewBox.width / 2;
+        viewBox.minY = 5000 - viewBox.height / 2;
+        updateViewBox();
+        displayMainImage(initialBlock.querySelector('text').textContent);
+    });
+
 }).catch(error => {
     console.error('Error setting daily topic:', error);
     // Fallback to a default topic if loading fails
@@ -136,7 +148,23 @@ getDailyTopic().then(topic => {
     topicBlock = initialBlock;
     allBlocks.push(initialBlock);
     blockGroup.appendChild(initialBlock);
+    
+
+    // Apply hover effect to the initial block
+    addHoverEffect(initialBlock);
+
+    // Display the main image for the initial block
     displayMainImage(dailyTopic);
+
+    // Set up click handler for the initial block
+    initialBlock.addEventListener('click', () => {
+        topicBlock = initialBlock;
+        updateBlockStrokes();
+        viewBox.minX = 5000 - viewBox.width / 2;
+        viewBox.minY = 5000 - viewBox.height / 2;
+        updateViewBox();
+        displayMainImage(initialBlock.querySelector('text').textContent);
+    });
 });
 
 
@@ -160,8 +188,6 @@ function addHoverEffect(block) {
     });
 }
 
-// Apply hover effect to initial block
-addHoverEffect(block);
 
 // Function to update the SVG viewBox
 function updateViewBox() {
@@ -771,91 +797,101 @@ function createNewBlock(text) {
     scaleGroup.appendChild(g);
     newBlock.appendChild(scaleGroup);
 
-    const topicX = parseFloat(topicBlock.getAttribute('x')) + newWidth / 2;
-    const topicY = parseFloat(topicBlock.getAttribute('y')) + initialHeight / 2;
-    let pr = 0.1 + Math.random() * (0.4 - 0.1);
-    let blockRadius = initialWidth / 2 + initialWidth + pr * initialWidth;
-
-    let placed = false;
-    let angle = null;
     let newCenterX, newCenterY;
 
-    for (let angleAttempts = 0; angleAttempts < 5 && !placed; angleAttempts++) {
-        angle = getValidAngle();
-        if (angle === null) continue;
-
-        const angleRad = angle * (Math.PI / 180);
-        const xComponent = blockRadius * Math.cos(angleRad);
-        const yComponent = blockRadius * Math.sin(angleRad);
-        newCenterX = topicX + xComponent;
-        newCenterY = topicY + yComponent;
-
+    if (!topicBlock) {
+        // This is the initial block; place it at the center of the SVG
+        newCenterX = 5000; // Center of 10000x10000 viewBox
+        newCenterY = 5000;
         newBlock.setAttribute('x', newCenterX - newWidth / 2);
         newBlock.setAttribute('y', newCenterY - initialHeight / 2);
+    } else {
+        // Position the new block relative to topicBlock
+        const topicX = parseFloat(topicBlock.getAttribute('x')) + parseFloat(topicBlock.getAttribute('width')) / 2;
+        const topicY = parseFloat(topicBlock.getAttribute('y')) + initialHeight / 2;
+        let pr = 0.1 + Math.random() * (0.4 - 0.1);
+        let blockRadius = initialWidth / 2 + initialWidth + pr * initialWidth;
 
-        let overlaps = false;
-        for (const existingBlock of allBlocks) {
-            if (checkOverlap(newBlock, existingBlock)) {
+        let placed = false;
+        let angle = null;
+
+        for (let angleAttempts = 0; angleAttempts < 5 && !placed; angleAttempts++) {
+            angle = getValidAngle();
+            if (angle === null) continue;
+
+            const angleRad = angle * (Math.PI / 180);
+            const xComponent = blockRadius * Math.cos(angleRad);
+            const yComponent = blockRadius * Math.sin(angleRad);
+            newCenterX = topicX + xComponent;
+            newCenterY = topicY + yComponent;
+
+            newBlock.setAttribute('x', newCenterX - newWidth / 2);
+            newBlock.setAttribute('y', newCenterY - initialHeight / 2);
+
+            let overlaps = false;
+            for (const existingBlock of allBlocks) {
+                if (checkOverlap(newBlock, existingBlock)) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (!overlaps && checkLineOverlap(newBlock)) {
                 overlaps = true;
-                break;
+            }
+
+            if (!overlaps) {
+                placed = true;
+                usedAngles.push(angle);
             }
         }
-        if (!overlaps && checkLineOverlap(newBlock)) {
-            overlaps = true;
-        }
 
-        if (!overlaps) {
-            placed = true;
-            usedAngles.push(angle);
-        }
-    }
+        if (!placed) {
+            for (let radiusAttempts = 0; radiusAttempts < 10 && !placed; radiusAttempts++) {
+                blockRadius += initialWidth * 0.1;
+                for (let angleAttempts = 0; angleAttempts < 5 && !placed; angleAttempts++) {
+                    angle = getValidAngle();
+                    if (angle === null) continue;
 
-    if (!placed) {
-        for (let radiusAttempts = 0; radiusAttempts < 10 && !placed; radiusAttempts++) {
-            blockRadius += initialWidth * 0.1;
-            for (let angleAttempts = 0; angleAttempts < 5 && !placed; angleAttempts++) {
-                angle = getValidAngle();
-                if (angle === null) continue;
+                    const angleRad = angle * (Math.PI / 180);
+                    const xComponent = blockRadius * Math.cos(angleRad);
+                    const yComponent = blockRadius * Math.sin(angleRad);
+                    newCenterX = topicX + xComponent;
+                    newCenterY = topicY + yComponent;
 
-                const angleRad = angle * (Math.PI / 180);
-                const xComponent = blockRadius * Math.cos(angleRad);
-                const yComponent = blockRadius * Math.sin(angleRad);
-                newCenterX = topicX + xComponent;
-                newCenterY = topicY + yComponent;
+                    newBlock.setAttribute('x', newCenterX - newWidth / 2);
+                    newBlock.setAttribute('y', newCenterY - initialHeight / 2);
 
-                newBlock.setAttribute('x', newCenterX - newWidth / 2);
-                newBlock.setAttribute('y', newCenterY - initialHeight / 2);
-
-                let overlaps = false;
-                for (const existingBlock of allBlocks) {
-                    if (checkOverlap(newBlock, existingBlock)) {
+                    let overlaps = false;
+                    for (const existingBlock of allBlocks) {
+                        if (checkOverlap(newBlock, existingBlock)) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+                    if (!overlaps && checkLineOverlap(newBlock)) {
                         overlaps = true;
-                        break;
+                    }
+
+                    if (!overlaps) {
+                        placed = true;
+                        usedAngles.push(angle);
                     }
                 }
-                if (!overlaps && checkLineOverlap(newBlock)) {
-                    overlaps = true;
-                }
-
-                if (!overlaps) {
-                    placed = true;
-                    usedAngles.push(angle);
-                }
             }
         }
-    }
 
-    if (!placed) {
-        console.warn('Could not find non-overlapping position; placing anyway.');
-    }
+        if (!placed) {
+            console.warn('Could not find non-overlapping position; placing anyway.');
+        }
 
-    const closestNodes = findClosestNodes(topicBlock, newBlock);
-    if (closestNodes) {
-        const line = createConnectionLine(closestNodes.start, closestNodes.end);
-        // Store references to the connected blocks on the line
-        line.block1 = topicBlock;
-        line.block2 = newBlock;
-        lineGroup.appendChild(line);
+        const closestNodes = findClosestNodes(topicBlock, newBlock);
+        if (closestNodes) {
+            const line = createConnectionLine(closestNodes.start, closestNodes.end);
+            // Store references to the connected blocks on the line
+            line.block1 = topicBlock;
+            line.block2 = newBlock;
+            lineGroup.appendChild(line);
+        }
     }
 
     newBlock.addEventListener('click', () => {
