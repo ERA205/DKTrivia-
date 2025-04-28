@@ -207,6 +207,54 @@ function updateBlockStrokes() {
         path.setAttribute('stroke', b === topicBlock ? '#6273B4' : '#000000');
     });
 }
+// Function to recalculate ranks for all game sessions with the same initialBlock
+async function recalculateRanks(initialBlockTitle) {
+    try {
+        // Fetch all game sessions with the same initialBlock
+        const sessionsSnapshot = await db.collection('gameSessions')
+            .where('initialBlock', '==', initialBlockTitle)
+            .get();
+
+        // Collect all sessions with their scores and IDs
+        const sessions = [];
+        sessionsSnapshot.forEach(doc => {
+            const data = doc.data();
+            sessions.push({
+                id: doc.id,
+                score: data.score,
+                rank: data.rank,
+                totalEntriesForTopic: data.totalEntriesForTopic
+            });
+        });
+
+        // Sort sessions by score in descending order
+        sessions.sort((a, b) => b.score - a.score);
+
+        // Recalculate ranks
+        const totalEntries = sessions.length;
+        let currentRank = 1;
+        let previousScore = null;
+
+        for (let i = 0; i < sessions.length; i++) {
+            const session = sessions[i];
+            // If the score is different from the previous one, update the rank
+            if (previousScore !== session.score) {
+                currentRank = i + 1;
+            }
+            // Update the session in Firestore with the new rank and totalEntriesForTopic
+            await db.collection('gameSessions').doc(session.id).update({
+                rank: currentRank,
+                totalEntriesForTopic: totalEntries
+            });
+            console.log(`Updated session ${session.id}: score=${session.score}, rank=${currentRank}, totalEntries=${totalEntries}`);
+            previousScore = session.score;
+        }
+
+        console.log(`Recalculated ranks for topic "${initialBlockTitle}": ${totalEntries} sessions updated`);
+    } catch (error) {
+        console.error('Error recalculating ranks:', error);
+    }
+}
 // Global mousemove handler to move blocks that are following the mouse
 svg.addEventListener('mousemove', (e) => {
     if (!movableBlock || !movableBlock.isFollowingMouse) return;
@@ -1017,6 +1065,13 @@ input.addEventListener('keydown', async (e) => {
             return;
         }
 
+        // Check for duplicate article
+        const isDuplicate = gameCsvData.some(data => data.article.toLowerCase() === subjectTitle.toLowerCase());
+        if (isDuplicate) {
+            showPopup('Answer has already been added');
+            return;
+        }
+
         const hasLink = await checkWikitextForLink(subjectTitle, topicText);
         if (!hasLink) {
             showPopup('Input does not match. Try again.');
@@ -1092,212 +1147,173 @@ input.addEventListener('keydown', async (e) => {
         displayMainImage(subjectTitle);
 
         // Check if block limit is reached
-    
+        if (allBlocks.length === 11) {
+            // Hide the text input box
+            input.style.display = 'none';
+            console.log('Game over: Text input box hidden');
 
-if (allBlocks.length === 11) {
-    // Hide the text input box
-    input.style.display = 'none';
-    console.log('Game over: Text input box hidden');
+            // Generate a unique identifier for anonymous users
+            const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
+            const isAnonymous = !currentUser;
+            const initialBlockTitle = gameCsvData[0].article; // Initial block title (e.g., "Wright brothers")
 
-    // Generate a unique identifier for anonymous users
-    const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
-    const isAnonymous = !currentUser;
-    const initialBlockTitle = gameCsvData[0].article; 
+            // Save game data to Firestore
+            const gameData = {
+                userIdentifier: userIdentifier,
+                isAnonymous: isAnonymous,
+                score: totalScore,
+                initialBlock: initialBlockTitle,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
 
-    // Save game data to Firestore
-    const gameData = {
-        userIdentifier: userIdentifier,
-        isAnonymous: isAnonymous,
-        score: totalScore,
-        initialBlock: initialBlockTitle,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    };
+            let gameSessionId;
+            await db.collection('gameSessions').add(gameData)
+                .then(docRef => {
+                    gameSessionId = docRef.id;
+                    console.log('Game session saved to Firestore with ID:', gameSessionId);
+                })
+                .catch(error => {
+                    console.error('Error saving game session to Firestore:', error);
+                });
 
-    let gameSessionId;
-    await db.collection('gameSessions').add(gameData)
-        .then(docRef => {
-            gameSessionId = docRef.id;
-            console.log('Game session saved to Firestore with ID:', gameSessionId);
-        })
-        .catch(error => {
-            console.error('Error saving game session to Firestore:', error);
-        });
+            // Recalculate ranks for all sessions with the same initialBlock
+            await recalculateRanks(initialBlockTitle);
 
-    // Calculate percentile (existing)
-    let percentile = 0;
-    const allScores = [];
-    await db.collection('gameSessions')
-        .get()
-        .then(querySnapshot => {
-            querySnapshot.forEach(doc => {
-                allScores.push(doc.data().score);
-            });
-            allScores.sort((a, b) => a - b);
-            const index = allScores.indexOf(totalScore);
-            percentile = index >= 0 ? ((index / allScores.length) * 100).toFixed(1) : 0;
-            console.log(`Score: ${totalScore}, Percentile: ${percentile}%`);
-        })
-        .catch(error => {
-            console.error('Error fetching scores for percentile:', error);
-            percentile = 'N/A';
-        });
-
-    // Calculate rank for the current topic
-    let rank = 0;
-    let totalEntriesForTopic = 0;
-    const topicScores = [];
-    await db.collection('gameSessions')
-        .where('initialBlock', '==', initialBlockTitle)
-        .get()
-        .then(querySnapshot => {
-            querySnapshot.forEach(doc => {
-                topicScores.push(doc.data().score);
-            });
-            topicScores.sort((a, b) => b - a); // Sort in descending order (highest to lowest)
-            totalEntriesForTopic = topicScores.length;
-            rank = topicScores.indexOf(totalScore) + 1; // Rank is 1-based (1st, 2nd, etc.)
-            if (rank === 0) { // If the score isn't found (e.g., due to duplicates), find the first occurrence
-                rank = topicScores.findIndex(score => score <= totalScore) + 1;
-            }
-            console.log(`Score: ${totalScore}, Rank: ${rank} out of ${totalEntriesForTopic} for topic ${initialBlockTitle}`);
-        })
-        .catch(error => {
-            console.error('Error fetching scores for ranking:', error);
-            rank = 'N/A';
-            totalEntriesForTopic = 'N/A';
-        });
-
-    // For logged-in users, save the percentile and rank in the game session
-    if (currentUser && gameSessionId) {
-        await db.collection('gameSessions').doc(gameSessionId).update({
-            percentile: percentile,
-            rank: rank,
-            totalEntriesForTopic: totalEntriesForTopic
-        })
-        .then(() => {
-            console.log('Percentile and rank saved for logged-in user:', percentile, rank);
-        })
-        .catch(error => {
-            console.error('Error saving percentile and rank:', error);
-        });
-    }
-
-    const popup = document.createElement('div');
-    popup.style.position = 'fixed';
-    popup.style.top = '50%';
-    popup.style.left = '50%';
-    popup.style.transform = 'translate(-50%, -50%)';
-    popup.style.backgroundColor = '#fff';
-    popup.style.border = '2px solid #6273B4';
-    popup.style.padding = '20px';
-    popup.style.borderRadius = '10px';
-    popup.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-    popup.style.zIndex = '1000';
-    popup.style.fontFamily = 'Arial, sans-serif';
-    popup.style.fontSize = '16px';
-    popup.style.textAlign = 'center';
-    popup.style.transition = 'all 0.3s ease-in-out';
-
-    const message = document.createElement('p');
-    message.textContent = 'Game Over';
-    message.style.margin = '0 0 10px 0';
-    popup.appendChild(message);
-
-    // Add total score and rank display
-    const scoreText = document.createElement('p');
-    scoreText.style.margin = '0 0 5px 0';
-    scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
-    popup.appendChild(scoreText);
-
-    const rankText = document.createElement('p');
-    rankText.style.margin = '0 0 15px 0';
-    rankText.innerHTML = `Your score ranks <span style="color: #6273B4;">${rank}</span> out of <span style="color: #6273B4;">${totalEntriesForTopic}</span> for this topic`;
-    popup.appendChild(rankText);
-
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '10px';
-    buttonContainer.style.justifyContent = 'center';
-
-    const resetButton = document.createElement('button');
-    resetButton.textContent = 'Reset Game';
-    resetButton.style.backgroundColor = '#6273B4';
-    resetButton.style.color = '#fff';
-    resetButton.style.border = 'none';
-    resetButton.style.padding = '10px 20px';
-    resetButton.style.borderRadius = '5px';
-    resetButton.style.cursor = 'pointer';
-    resetButton.addEventListener('click', async () => {
-        await resetGame();
-        popup.remove();
-    });
-    buttonContainer.appendChild(resetButton);
-
-    const reviewButton = document.createElement('button');
-    reviewButton.textContent = 'Review Game';
-    reviewButton.style.backgroundColor = '#6273B4';
-    reviewButton.style.color = '#fff';
-    reviewButton.style.border = 'none';
-    reviewButton.style.padding = '10px 20px';
-    reviewButton.style.borderRadius = '5px';
-    reviewButton.style.cursor = 'pointer';
-    let isMinimized = false;
-
-    const minimizePopup = () => {
-        try {
-            popup.style.top = 'auto';
-            popup.style.bottom = '10px';
-            popup.style.left = '50%';
-            popup.style.transform = 'translateX(-50%)';
-            popup.style.width = '200px';
-            popup.style.padding = '10px';
-            popup.style.minHeight = 'auto';
-            message.textContent = 'Game Over - Click to Expand';
-            scoreText.style.display = 'none';
-            rankText.style.display = 'none';
-            buttonContainer.style.display = 'none';
-            isMinimized = true;
-            console.log('Popup minimized');
-        } catch (error) {
-            console.error('Error minimizing popup:', error);
-        }
-    };
-
-    const expandPopup = () => {
-        try {
+            const popup = document.createElement('div');
+            popup.style.position = 'fixed';
             popup.style.top = '50%';
-            popup.style.bottom = 'auto';
             popup.style.left = '50%';
             popup.style.transform = 'translate(-50%, -50%)';
-            popup.style.width = 'auto';
+            popup.style.backgroundColor = '#fff';
+            popup.style.border = '2px solid #6273B4';
             popup.style.padding = '20px';
-            popup.style.minHeight = 'auto';
+            popup.style.borderRadius = '10px';
+            popup.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+            popup.style.zIndex = '1000';
+            popup.style.fontFamily = 'Arial, sans-serif';
+            popup.style.fontSize = '16px';
+            popup.style.textAlign = 'center';
+            popup.style.transition = 'all 0.3s ease-in-out';
+
+            const message = document.createElement('p');
             message.textContent = 'Game Over';
-            scoreText.style.display = 'block';
-            rankText.style.display = 'block';
+            message.style.margin = '0 0 10px 0';
+            popup.appendChild(message);
+
+            // Add total score and rank display
+            const scoreText = document.createElement('p');
+            scoreText.style.margin = '0 0 5px 0';
+            scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
+            popup.appendChild(scoreText);
+
+            // Fetch the updated rank after recalculation
+            let rank = 0;
+            let totalEntriesForTopic = 0;
+            await db.collection('gameSessions')
+                .doc(gameSessionId)
+                .get()
+                .then(doc => {
+                    if (doc.exists) {
+                        rank = doc.data().rank || 'N/A';
+                        totalEntriesForTopic = doc.data().totalEntriesForTopic || 'N/A';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching updated rank:', error);
+                    rank = 'N/A';
+                    totalEntriesForTopic = 'N/A';
+                });
+
+            const rankText = document.createElement('p');
+            rankText.style.margin = '0 0 15px 0';
+            rankText.innerHTML = `Your score ranks <span style="color: #6273B4;">${rank}</span> out of <span style="color: #6273B4;">${totalEntriesForTopic}</span> for this topic`;
+            popup.appendChild(rankText);
+
+            const buttonContainer = document.createElement('div');
             buttonContainer.style.display = 'flex';
-            isMinimized = false;
-            console.log('Popup expanded');
-        } catch (error) {
-            console.error('Error expanding popup:', error);
+            buttonContainer.style.gap = '10px';
+            buttonContainer.style.justifyContent = 'center';
+
+            const resetButton = document.createElement('button');
+            resetButton.textContent = 'Reset Game';
+            resetButton.style.backgroundColor = '#6273B4';
+            resetButton.style.color = '#fff';
+            resetButton.style.border = 'none';
+            resetButton.style.padding = '10px 20px';
+            resetButton.style.borderRadius = '5px';
+            resetButton.style.cursor = 'pointer';
+            resetButton.addEventListener('click', async () => {
+                await resetGame();
+                popup.remove();
+            });
+            buttonContainer.appendChild(resetButton);
+
+            const reviewButton = document.createElement('button');
+            reviewButton.textContent = 'Review Game';
+            reviewButton.style.backgroundColor = '#6273B4';
+            reviewButton.style.color = '#fff';
+            reviewButton.style.border = 'none';
+            reviewButton.style.padding = '10px 20px';
+            reviewButton.style.borderRadius = '5px';
+            reviewButton.style.cursor = 'pointer';
+            let isMinimized = false;
+
+            const minimizePopup = () => {
+                try {
+                    popup.style.top = 'auto';
+                    popup.style.bottom = '10px';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translateX(-50%)';
+                    popup.style.width = '200px';
+                    popup.style.padding = '10px';
+                    popup.style.minHeight = 'auto';
+                    message.textContent = 'Game Over - Click to Expand';
+                    scoreText.style.display = 'none';
+                    rankText.style.display = 'none';
+                    buttonContainer.style.display = 'none';
+                    isMinimized = true;
+                    console.log('Popup minimized');
+                } catch (error) {
+                    console.error('Error minimizing popup:', error);
+                }
+            };
+
+            const expandPopup = () => {
+                try {
+                    popup.style.top = '50%';
+                    popup.style.bottom = 'auto';
+                    popup.style.left = '50%';
+                    popup.style.transform = 'translate(-50%, -50%)';
+                    popup.style.width = 'auto';
+                    popup.style.padding = '20px';
+                    popup.style.minHeight = 'auto';
+                    message.textContent = 'Game Over';
+                    scoreText.style.display = 'block';
+                    rankText.style.display = 'block';
+                    buttonContainer.style.display = 'flex';
+                    isMinimized = false;
+                    console.log('Popup expanded');
+                } catch (error) {
+                    console.error('Error expanding popup:', error);
+                }
+            };
+
+            reviewButton.addEventListener('click', minimizePopup);
+
+            popup.addEventListener('click', (event) => {
+                if (isMinimized && event.target === popup) {
+                    expandPopup();
+                }
+            });
+
+            buttonContainer.appendChild(reviewButton);
+            popup.appendChild(buttonContainer);
+
+            document.body.appendChild(popup);
         }
-    };
-
-    reviewButton.addEventListener('click', minimizePopup);
-
-    popup.addEventListener('click', (event) => {
-        if (isMinimized && event.target === popup) {
-            expandPopup();
-        }
-    });
-
-    buttonContainer.appendChild(reviewButton);
-    popup.appendChild(buttonContainer);
-
-    document.body.appendChild(popup);
-}
     }
 });
+
 // Handle banner button popups
 document.getElementById('how-to-play-button').addEventListener('click', () => {
     const popup = document.createElement('div');
