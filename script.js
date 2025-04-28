@@ -207,6 +207,21 @@ function updateBlockStrokes() {
         path.setAttribute('stroke', b === topicBlock ? '#6273B4' : '#000000');
     });
 }
+// Global mousemove handler to move blocks that are following the mouse
+svg.addEventListener('mousemove', (e) => {
+    if (!movableBlock || !movableBlock.isFollowingMouse) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const svgPt = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const blockWidth = parseFloat(movableBlock.getAttribute('width'));
+    const blockHeight = parseFloat(movableBlock.getAttribute('height'));
+    const newX = svgPt.x - blockWidth / 2;
+    const newY = svgPt.y - blockHeight / 2;
+    movableBlock.setAttribute('x', newX);
+    movableBlock.setAttribute('y', newY);
+    updateConnectedLines(movableBlock);
+});
 
 // Function to check if an angle is within any excluded range
 function isAngleExcluded(angle) {
@@ -548,6 +563,10 @@ async function resetGame() {
     blockGroup.appendChild(initialBlock);
     allBlocks.push(initialBlock);
     topicBlock = initialBlock; // Ensure the initial block is selected
+    
+    // Reset follow-mouse state
+    initialBlock.isFollowingMouse = false;
+    movableBlock = null;
     
     // Update block strokes to reflect the selected state
     updateBlockStrokes();
@@ -896,14 +915,17 @@ function createNewBlock(text) {
             console.warn('Could not find non-overlapping position; placing anyway.');
         }
 
-        const closestNodes = findClosestNodes(topicBlock, newBlock);
-        if (closestNodes) {
-            const line = createConnectionLine(closestNodes.start, closestNodes.end);
-            // Store references to the connected blocks on the line
-            line.block1 = topicBlock;
-            line.block2 = newBlock;
-            lineGroup.appendChild(line);
-        }
+        // Only create a connection line if topicBlock exists and is not the same as the new block
+    if (topicBlock && topicBlock !== newBlock) {
+    const closestNodes = findClosestNodes(topicBlock, newBlock);
+    if (closestNodes) {
+        const line = createConnectionLine(closestNodes.start, closestNodes.end);
+        // Store references to the connected blocks on the line
+        line.block1 = topicBlock;
+        line.block2 = newBlock;
+        lineGroup.appendChild(line);
+    }
+}
     }
 
     newBlock.addEventListener('click', () => {
@@ -925,63 +947,30 @@ function createNewBlock(text) {
         }
     });
 
-    // Add double-click to toggle movable state
-    newBlock.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        if (movableBlock === newBlock) {
-            // Double-click again to exit movable state
-            movableBlock = null;
-            const path = newBlock.querySelector('path');
-            path.setAttribute('stroke', newBlock === topicBlock ? '#6273B4' : '#000000'); // Restore original stroke
-        } else {
-            // Enter movable state
-            if (movableBlock) {
-                // Reset previous movable block's stroke
-                const prevPath = movableBlock.querySelector('path');
-                prevPath.setAttribute('stroke', movableBlock === topicBlock ? '#6273B4' : '#000000');
-            }
-            movableBlock = newBlock;
-            const path = newBlock.querySelector('path');
-            path.setAttribute('stroke', '#FFFF00'); // Yellow highlight
+    // Add double-click to toggle follow-mouse state
+newBlock.isFollowingMouse = false; // Add a property to track the follow-mouse state
+newBlock.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    newBlock.isFollowingMouse = !newBlock.isFollowingMouse; // Toggle follow-mouse state
+    const path = newBlock.querySelector('path');
+    if (newBlock.isFollowingMouse) {
+        // Start following mouse
+        if (movableBlock && movableBlock !== newBlock) {
+            // Stop the previous block from following the mouse
+            movableBlock.isFollowingMouse = false;
+            const prevPath = movableBlock.querySelector('path');
+            prevPath.setAttribute('stroke', movableBlock === topicBlock ? '#6273B4' : '#000000');
         }
-    });
-
-    // Add drag functionality for movable state
-    let isDraggingBlock = false;
-    let dragStartX, dragStartY;
-    newBlock.addEventListener('mousedown', (e) => {
-        if (movableBlock !== newBlock) return; // Only drag if in movable state
-        e.stopPropagation();
-        isDraggingBlock = true;
-        const pt = svg.createSVGPoint();
-        pt.x = e.clientX;
-        pt.y = e.clientY;
-        const svgPt = pt.matrixTransform(svg.getScreenCTM().inverse());
-        dragStartX = svgPt.x - parseFloat(newBlock.getAttribute('x'));
-        dragStartY = svgPt.y - parseFloat(newBlock.getAttribute('y'));
-    });
-
-    newBlock.addEventListener('mousemove', (e) => {
-        if (!isDraggingBlock || movableBlock !== newBlock) return;
-        e.stopPropagation();
-        const pt = svg.createSVGPoint();
-        pt.x = e.clientX;
-        pt.y = e.clientY;
-        const svgPt = pt.matrixTransform(svg.getScreenCTM().inverse());
-        const newX = svgPt.x - dragStartX;
-        const newY = svgPt.y - dragStartY;
-        newBlock.setAttribute('x', newX);
-        newBlock.setAttribute('y', newY);
-        updateConnectedLines(newBlock);
-    });
-
-    newBlock.addEventListener('mouseup', () => {
-        isDraggingBlock = false;
-    });
-
-    newBlock.addEventListener('mouseleave', () => {
-        isDraggingBlock = false;
-    });
+        movableBlock = newBlock;
+        path.setAttribute('stroke', '#FFFF00'); // Yellow highlight to indicate following
+        console.log(`${textElement.textContent} is now following the mouse`);
+    } else {
+        // Stop following mouse
+        movableBlock = null;
+        path.setAttribute('stroke', newBlock === topicBlock ? '#6273B4' : '#000000');
+        console.log(`${textElement.textContent} position fixed`);
+    }
+});
 
     newBlock.addEventListener('mousedown', (e) => e.stopPropagation());
 
@@ -1489,19 +1478,4 @@ svg.addEventListener('mousemove', (e) => {
     updateViewBox();
 });
 
-
-
-// Exit movable state on SVG click (outside blocks)
-svg.addEventListener('click', (e) => {
-    if (isDragging) {
-        console.log('Ignoring click event during canvas dragging');
-        return; // Ignore click events during canvas dragging
-    }
-    if (movableBlock) {
-        console.log('Exiting movable state: movableBlock =', movableBlock.querySelector('text').textContent);
-        const path = movableBlock.querySelector('path');
-        path.setAttribute('stroke', movableBlock === topicBlock ? '#6273B4' : '#000000'); // Restore original stroke
-        movableBlock = null;
-    }
-});
 
