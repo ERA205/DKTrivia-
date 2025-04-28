@@ -52,11 +52,91 @@ let viewBox = { minX: 0, minY: 0, width: 10000, height: 10000 };
 let usedAngles = [];
 let topicBlock = block;
 const allBlocks = [block];
+// Fetch topics from Firestore
+let topics = [];
+async function loadTopics() {
+    try {
+        const snapshot = await db.collection('topics')
+            .orderBy('index', 'asc')
+            .get();
+        topics = snapshot.docs.map(doc => doc.data().name);
+        console.log('Topics loaded from Firestore:', topics);
+    } catch (error) {
+        console.error('Error loading topics from Firestore:', error);
+        // Fallback to a default topic if Firestore fails
+        topics = ["Paris"];
+    }
+}
+// Function to get the daily topic
+async function getDailyTopic() {
+    // Ensure topics are loaded
+    if (topics.length === 0) {
+        await loadTopics();
+    }
 
-let gameCsvData = [{ article: 'Paris', ratio: 1, pointsEarned: 0, views: 0 }]; // Initialize with Paris
+    const startDate = new Date('2025-01-01T00:00:00Z'); // Fixed start date (UTC)
+    const now = new Date();
+    
+    // Calculate the number of days since the start date
+    const utcStartDate = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate());
+    const utcNow = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const daysSinceStart = Math.floor((utcNow - utcStartDate) / (1000 * 60 * 60 * 24));
+    
+    // Use the day offset to select a topic index (cycle through the list)
+    const topicIndex = daysSinceStart % topics.length;
+    
+    // Get the topic name for the calculated index
+    const topicName = topics[topicIndex];
+    console.log(`Selected topic for index ${topicIndex}: ${topicName}`);
 
-let totalScore = 0; // Track total score
-let movableBlock = null; // Track the currently movable block
+    // Match the topic name to its Wikipedia article title
+    try {
+        const wikiTitle = await getWikipediaArticleTitle(topicName);
+        if (!wikiTitle) {
+            console.error(`No matching Wikipedia article found for topic: ${topicName}`);
+            return "Paris"; // Fallback to a default topic
+        }
+        console.log(`Wikipedia article title for ${topicName}: ${wikiTitle}`);
+        return wikiTitle;
+    } catch (error) {
+        console.error(`Error matching Wikipedia article for ${topicName}:`, error);
+        return "Paris"; // Fallback to a default topic
+    }
+}
+// Set the initial topic for the game
+let dailyTopic;
+getDailyTopic().then(topic => {
+    dailyTopic = topic;
+    console.log('Daily topic:', dailyTopic);
+
+    // Initial block setup
+    let allBlocks = [];
+    let usedAngles = [];
+    let totalScore = 0;
+    let lastBlockPoints = 0;
+    let topicBlock;
+
+    // Initialize game CSV data with the daily topic
+    let gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
+
+    // Create the initial block with the daily topic
+    const initialBlock = createNewBlock(dailyTopic);
+    topicBlock = initialBlock;
+    allBlocks.push(initialBlock);
+}).catch(error => {
+    console.error('Error setting daily topic:', error);
+    // Fallback to a default topic if loading fails
+    dailyTopic = "Paris";
+    let allBlocks = [];
+    let usedAngles = [];
+    let totalScore = 0;
+    let lastBlockPoints = 0;
+    let topicBlock;
+    let gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
+    const initialBlock = createNewBlock(dailyTopic);
+    topicBlock = initialBlock;
+    allBlocks.push(initialBlock);
+});
 
 
 // Block properties
@@ -431,7 +511,7 @@ async function resetGame() {
     lastBlockPoints = 0;
     
     // Reset CSV with initial block
-    gameCsvData = [{ article: 'Paris', ratio: 1, pointsEarned: 0, views: 0 }];
+    gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     
     // Update initial block views and display
     const viewsStr = await fetchAverageMonthlyViews('Paris');
@@ -1258,6 +1338,7 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr>
+                            <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Topic</th>
                             <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Rank</th>
                             <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Score</th>
                             <th style="border-bottom: 1px solid #6273B4; padding: 5px; color: #6273B4;">Date</th>
@@ -1281,7 +1362,7 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 if (querySnapshot.empty) {
                     gameHistoryBody.innerHTML = `
                         <tr>
-                            <td colspan="3" style="padding: 5px; text-align: center;">No games played yet.</td>
+                            <td colspan="4" style="padding: 5px; text-align: center;">No games played yet.</td>
                         </tr>
                     `;
                 } else {
@@ -1291,6 +1372,7 @@ document.getElementById('profile-button').addEventListener('click', () => {
                         const rank = data.rank !== undefined ? data.rank : 'N/A';
                         gameHistoryBody.innerHTML += `
                             <tr>
+                                <td style="padding: 5px;">${data.initialBlock}</td>
                                 <td style="padding: 5px;">${rank}</td>
                                 <td style="padding: 5px;">${data.score}</td>
                                 <td style="padding: 5px;">${timestamp}</td>
@@ -1303,7 +1385,7 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 console.error('Error fetching game history:', error);
                 popup.querySelector('#game-history').innerHTML = `
                     <tr>
-                        <td colspan="3" style="padding: 5px; text-align: center;">Error loading game history.</td>
+                        <td colspan="4" style="padding: 5px; text-align: center;">Error loading game history.</td>
                     </tr>
                 `;
             });
