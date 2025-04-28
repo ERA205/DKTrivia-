@@ -543,7 +543,7 @@ function updateConnectedLines(block) {
 }
 
 async function resetGame() {
-    // Clear all blocks
+    // Clear all blocks and lines
     allBlocks.length = 0;
     
     // Remove all blocks and lines from SVG
@@ -558,6 +558,10 @@ async function resetGame() {
     // Reset CSV with the current daily topic
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     
+    // Temporarily set topicBlock to null to prevent line creation for the initial block
+    const previousTopicBlock = topicBlock;
+    topicBlock = null;
+
     // Create a new initial block with the daily topic
     const initialBlock = createNewBlock(dailyTopic);
     blockGroup.appendChild(initialBlock);
@@ -577,6 +581,10 @@ async function resetGame() {
     gameCsvData[0].views = views;
     console.log('Game reset, CSV initialized:', generateCsvContent());
     displayMainImage(initialBlock.querySelector('text').textContent, 0);
+
+    // Debug: Check if any lines exist after reset
+    const linesAfterReset = lineGroup.querySelectorAll('line');
+    console.log('Lines after reset:', linesAfterReset.length, linesAfterReset);
 
     // Show the text input box
     input.style.display = 'block';
@@ -925,6 +933,8 @@ function createNewBlock(text) {
         line.block2 = newBlock;
         lineGroup.appendChild(line);
     }
+} else {
+    console.log(`Skipping line creation: topicBlock is ${topicBlock ? topicBlock.querySelector('text').textContent : 'null'}, newBlock is ${newBlock.querySelector('text').textContent}`);
 }
     }
 
