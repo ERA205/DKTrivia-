@@ -115,56 +115,61 @@ let dailyTopic;
 getDailyTopic().then(topic => {
     dailyTopic = topic;
     console.log('Daily topic:', dailyTopic);
+
     // Initialize game CSV data with the daily topic
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
 
     // Create the initial block with the daily topic
     const initialBlock = createNewBlock(dailyTopic);
-    topicBlock = initialBlock;
+    topicBlock = initialBlock; // Set as the selected block
     allBlocks.push(initialBlock);
     blockGroup.appendChild(initialBlock);
 
     // Apply hover effect to the initial block
     addHoverEffect(initialBlock);
 
-    // Display the main image for the initial block
+    // Display the main image for the initial block (initial selection)
     displayMainImage(dailyTopic);
 
     // Set up click handler for the initial block
     initialBlock.addEventListener('click', () => {
-        topicBlock = initialBlock;
-        updateBlockStrokes();
-        viewBox.minX = 5000 - viewBox.width / 2;
-        viewBox.minY = 5000 - viewBox.height / 2;
-        updateViewBox();
-        displayMainImage(initialBlock.querySelector('text').textContent);
+        // Only update if the clicked block is not already the selected topicBlock
+        if (topicBlock !== initialBlock) {
+            topicBlock = initialBlock;
+            updateBlockStrokes();
+            viewBox.minX = 5000 - viewBox.width / 2;
+            viewBox.minY = 5000 - viewBox.height / 2;
+            updateViewBox();
+            displayMainImage(initialBlock.querySelector('text').textContent);
+        }
     });
-
 }).catch(error => {
     console.error('Error setting daily topic:', error);
     // Fallback to a default topic if loading fails
     dailyTopic = "Photosynthesis";
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     const initialBlock = createNewBlock(dailyTopic);
-    topicBlock = initialBlock;
+    topicBlock = initialBlock; // Set as the selected block
     allBlocks.push(initialBlock);
     blockGroup.appendChild(initialBlock);
-    
 
     // Apply hover effect to the initial block
     addHoverEffect(initialBlock);
 
-    // Display the main image for the initial block
+    // Display the main image for the initial block (initial selection)
     displayMainImage(dailyTopic);
 
     // Set up click handler for the initial block
     initialBlock.addEventListener('click', () => {
-        topicBlock = initialBlock;
-        updateBlockStrokes();
-        viewBox.minX = 5000 - viewBox.width / 2;
-        viewBox.minY = 5000 - viewBox.height / 2;
-        updateViewBox();
-        displayMainImage(initialBlock.querySelector('text').textContent);
+        // Only update if the clicked block is not already the selected topicBlock
+        if (topicBlock !== initialBlock) {
+            topicBlock = initialBlock;
+            updateBlockStrokes();
+            viewBox.minX = 5000 - viewBox.width / 2;
+            viewBox.minY = 5000 - viewBox.height / 2;
+            updateViewBox();
+            displayMainImage(initialBlock.querySelector('text').textContent);
+        }
     });
 });
 
@@ -523,24 +528,30 @@ function updateConnectedLines(block) {
 }
 
 async function resetGame() {
-    // Clear all blocks except the initial one
-    const initialBlock = allBlocks[0];
-    allBlocks.length = 1; // Reset array to only initial block
-    allBlocks[0] = initialBlock;
+    // Clear all blocks
+    allBlocks.length = 0;
     
     // Remove all blocks and lines from SVG
     blockGroup.innerHTML = '';
-    lineGroup.innerHTML = ''; // Clears lines and their references
-    blockGroup.appendChild(initialBlock);
+    lineGroup.innerHTML = '';
     
     // Reset used angles and scoring data
     usedAngles = [];
     totalScore = 0;
     lastBlockPoints = 0;
     
-    // Reset CSV with initial block
+    // Reset CSV with the current daily topic
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     
+    // Create a new initial block with the daily topic
+    const initialBlock = createNewBlock(dailyTopic);
+    blockGroup.appendChild(initialBlock);
+    allBlocks.push(initialBlock);
+    topicBlock = initialBlock; // Ensure the initial block is selected
+    
+    // Update block strokes to reflect the selected state
+    updateBlockStrokes();
+
     // Update initial block views and display
     const viewsStr = await fetchAverageMonthlyViews(dailyTopic);
     const views = viewsStr !== 'N/A' ? parseFloat(viewsStr.replace(/,/g, '')) : 0;
@@ -896,19 +907,22 @@ function createNewBlock(text) {
     }
 
     newBlock.addEventListener('click', () => {
-        topicBlock = newBlock;
-        updateBlockStrokes();
-        // Calculate current center position based on block's x, y, width, and height
-        const currentX = parseFloat(newBlock.getAttribute('x'));
-        const currentY = parseFloat(newBlock.getAttribute('y'));
-        const blockWidth = parseFloat(newBlock.getAttribute('width'));
-        const blockHeight = parseFloat(newBlock.getAttribute('height'));
-        const currentCenterX = currentX + blockWidth / 2;
-        const currentCenterY = currentY + blockHeight / 2;
-        viewBox.minX = currentCenterX - viewBox.width / 2;
-        viewBox.minY = currentCenterY - viewBox.height / 2;
-        updateViewBox();
-        displayMainImage(textElement.textContent);
+        // Only update if the clicked block is not already the selected topicBlock
+        if (topicBlock !== newBlock) {
+            topicBlock = newBlock;
+            updateBlockStrokes();
+            // Calculate current center position based on block's x, y, width, and height
+            const currentX = parseFloat(newBlock.getAttribute('x'));
+            const currentY = parseFloat(newBlock.getAttribute('y'));
+            const blockWidth = parseFloat(newBlock.getAttribute('width'));
+            const blockHeight = parseFloat(newBlock.getAttribute('height'));
+            const currentCenterX = currentX + blockWidth / 2;
+            const currentCenterY = currentY + blockHeight / 2;
+            viewBox.minX = currentCenterX - viewBox.width / 2;
+            viewBox.minY = currentCenterY - viewBox.height / 2;
+            updateViewBox();
+            displayMainImage(textElement.textContent);
+        }
     });
 
     // Add double-click to toggle movable state
