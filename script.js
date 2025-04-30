@@ -60,35 +60,47 @@ let startX, startY;
 let viewBox = { minX: 0, minY: 0, width: 10000, height: 10000 };
 
 // Fetch topics from Firestore
-let topics = [];
+let topicsByIndex = []; // Array indexed by the 'index' field
 async function loadTopics() {
     try {
         const snapshot = await db.collection('topics')
             .orderBy('index', 'asc')
             .get();
-        // Filter documents to ensure they have a name field, and log for debugging
+        // Filter documents to ensure they have a name field and a valid index
         const topicDocs = snapshot.docs.filter(doc => {
             const data = doc.data();
             const hasName = data.name && typeof data.name === 'string' && data.name.trim() !== '';
-            if (!hasName) {
+            const hasValidIndex = Number.isInteger(data.index) && data.index >= 0;
+            if (!hasName || !hasValidIndex) {
                 console.warn(`Invalid topic document: ${doc.id}, data:`, data);
+                return false;
             }
-            return hasName;
+            return true;
         });
-        // Map to names and ensure indices are sequential
-        topics = topicDocs.map(doc => doc.data().name);
-        console.log('Topics loaded from Firestore:', topics);
+        // Store topics in an array indexed by their 'index' field
+        topicsByIndex = [];
+        topicDocs.forEach(doc => {
+            const data = doc.data();
+            topicsByIndex[data.index] = data.name;
+        });
+        // Log all topics with their indices
+        const topicList = topicDocs.map(doc => ({ index: doc.data().index, name: doc.data().name }));
+        console.log('Topics loaded from Firestore:', topicList);
+        // Find the highest index for cycling
+        const maxIndex = Math.max(...topicDocs.map(doc => doc.data().index), 0);
+        console.log('Highest index in topics:', maxIndex);
         // Ensure topics array is not empty
-        if (topics.length === 0) {
+        if (topicDocs.length === 0) {
             console.warn('No valid topics found in Firestore, using fallback');
-            topics = ["Photosynthesis"];
+            topicsByIndex[0] = "Photosynthesis";
         }
     } catch (error) {
         console.error('Error loading topics from Firestore:', error);
         // Fallback to a default topic if Firestore fails
-        topics = ["Photosynthesis"];
+        topicsByIndex[0] = "Photosynthesis";
     }
 }
+
 // Function to calculate the day of the year (1 to 365/366)
 function getDayOfYear(date) {
     const startOfYear = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
@@ -98,21 +110,55 @@ function getDayOfYear(date) {
     console.log(`Day of the year: ${dayOfYear}`);
     return dayOfYear;
 }
+
 // Function to get the daily topic
 async function getDailyTopic() {
     // Ensure topics are loaded
-    if (topics.length === 0) {
+    if (topicsByIndex.length === 0) {
         await loadTopics();
     }
 
     const now = new Date();
     const dayOfYear = getDayOfYear(now); // Get the day of the year (1 to 365/366)
     
-    // Use the day of the year to select a topic index (cycle through the list)
-    const topicIndex = (dayOfYear - 1) % topics.length; // Subtract 1 to make it 0-based for indexing
+    // Use the day of the year to select a topic index
+    let topicIndex = dayOfYear - 1; // Subtract 1 to make it 0-based for indexing
+    let topicName = topicsByIndex[topicIndex];
     
-    // Get the topic name for the calculated index
-    const topicName = topics[topicIndex];
+    // If no topic exists for the exact index, cycle through the available indices
+    if (!topicName) {
+        // Find the highest index with a topic
+        const maxIndex = topicsByIndex.reduce((max, topic, idx) => topic ? Math.max(max, idx) : max, 0);
+        if (maxIndex === 0 && !topicsByIndex[0]) {
+            console.warn('No topics available, using fallback');
+            topicName = "Photosynthesis";
+            topicIndex = 0;
+        } else {
+            topicIndex = topicIndex % (maxIndex + 1);
+            topicName = topicsByIndex[topicIndex];
+            if (!topicName) {
+                // If still no topic, find the nearest lower index with a topic
+                for (let i = topicIndex; i >= 0; i--) {
+                    if (topicsByIndex[i]) {
+                        topicIndex = i;
+                        topicName = topicsByIndex[i];
+                        break;
+                    }
+                }
+                // If no topic found, use the first available topic
+                if (!topicName) {
+                    for (let i = 0; i <= maxIndex; i++) {
+                        if (topicsByIndex[i]) {
+                            topicIndex = i;
+                            topicName = topicsByIndex[i];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     console.log(`Selected topic for index ${topicIndex}: ${topicName}`);
 
     // Match the topic name to its Wikipedia article title
