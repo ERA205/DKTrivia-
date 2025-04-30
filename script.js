@@ -997,18 +997,19 @@ function createNewBlock(text) {
         }
 
         // Only create a connection line if topicBlock exists and is not the same as the new block
-    if (topicBlock && topicBlock !== newBlock) {
-    const closestNodes = findClosestNodes(topicBlock, newBlock);
-    if (closestNodes) {
-        const line = createConnectionLine(closestNodes.start, closestNodes.end);
-        // Store references to the connected blocks on the line
-        line.block1 = topicBlock;
-        line.block2 = newBlock;
-        lineGroup.appendChild(line);
-    }
-} else {
-    console.log(`Skipping line creation: topicBlock is ${topicBlock ? topicBlock.querySelector('text').textContent : 'null'}, newBlock is ${newBlock.querySelector('text').textContent}`);
-}
+        if (topicBlock && topicBlock !== newBlock) {
+            console.log(`Creating connection line between ${topicBlock.querySelector('text').textContent} and ${newBlock.querySelector('text').textContent}`);
+            const closestNodes = findClosestNodes(topicBlock, newBlock);
+            if (closestNodes) {
+                const line = createConnectionLine(closestNodes.start, closestNodes.end);
+                // Store references to the connected blocks on the line
+                line.block1 = topicBlock;
+                line.block2 = newBlock;
+                lineGroup.appendChild(line);
+            }
+        } else {
+            console.log(`Skipping line creation: topicBlock is ${topicBlock ? topicBlock.querySelector('text').textContent : 'null'}, newBlock is ${newBlock.querySelector('text').textContent}`);
+        }
     }
 
     newBlock.addEventListener('click', () => {
@@ -1031,36 +1032,35 @@ function createNewBlock(text) {
     });
 
     // Add double-click to toggle follow-mouse state
-newBlock.isFollowingMouse = false; // Add a property to track the follow-mouse state
-newBlock.addEventListener('dblclick', (e) => {
-    e.stopPropagation();
-    newBlock.isFollowingMouse = !newBlock.isFollowingMouse; // Toggle follow-mouse state
-    const path = newBlock.querySelector('path');
-    if (newBlock.isFollowingMouse) {
-        // Start following mouse
-        if (movableBlock && movableBlock !== newBlock) {
-            // Stop the previous block from following the mouse
-            movableBlock.isFollowingMouse = false;
-            const prevPath = movableBlock.querySelector('path');
-            prevPath.setAttribute('stroke', movableBlock === topicBlock ? '#6273B4' : '#000000');
+    newBlock.isFollowingMouse = false; // Add a property to track the follow-mouse state
+    newBlock.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        newBlock.isFollowingMouse = !newBlock.isFollowingMouse; // Toggle follow-mouse state
+        const path = newBlock.querySelector('path');
+        if (newBlock.isFollowingMouse) {
+            // Start following mouse
+            if (movableBlock && movableBlock !== newBlock) {
+                // Stop the previous block from following the mouse
+                movableBlock.isFollowingMouse = false;
+                const prevPath = movableBlock.querySelector('path');
+                prevPath.setAttribute('stroke', movableBlock === topicBlock ? '#6273B4' : '#000000');
+            }
+            movableBlock = newBlock;
+            path.setAttribute('stroke', '#FFFF00'); // Yellow highlight to indicate following
+            console.log(`${textElement.textContent} is now following the mouse`);
+        } else {
+            // Stop following mouse
+            movableBlock = null;
+            path.setAttribute('stroke', newBlock === topicBlock ? '#6273B4' : '#000000');
+            console.log(`${textElement.textContent} position fixed`);
         }
-        movableBlock = newBlock;
-        path.setAttribute('stroke', '#FFFF00'); // Yellow highlight to indicate following
-        console.log(`${textElement.textContent} is now following the mouse`);
-    } else {
-        // Stop following mouse
-        movableBlock = null;
-        path.setAttribute('stroke', newBlock === topicBlock ? '#6273B4' : '#000000');
-        console.log(`${textElement.textContent} position fixed`);
-    }
-});
+    });
 
     newBlock.addEventListener('mousedown', (e) => e.stopPropagation());
 
     addHoverEffect(newBlock);
 
     blockGroup.appendChild(newBlock);
-    allBlocks.push(newBlock);
     updateBlockStrokes();
 
     return newBlock;
@@ -1168,6 +1168,7 @@ input.addEventListener('keydown', async (e) => {
         console.log('Updated CSV:', generateCsvContent());
 
         const newBlock = createNewBlock(subjectTitle);
+        allBlocks.push(newBlock); // Add the new block to allBlocks
         // Update game window for new topic block
         displayMainImage(subjectTitle);
 
