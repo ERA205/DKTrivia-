@@ -66,8 +66,23 @@ async function loadTopics() {
         const snapshot = await db.collection('topics')
             .orderBy('index', 'asc')
             .get();
-        topics = snapshot.docs.map(doc => doc.data().name);
+        // Filter documents to ensure they have a name field, and log for debugging
+        const topicDocs = snapshot.docs.filter(doc => {
+            const data = doc.data();
+            const hasName = data.name && typeof data.name === 'string' && data.name.trim() !== '';
+            if (!hasName) {
+                console.warn(`Invalid topic document: ${doc.id}, data:`, data);
+            }
+            return hasName;
+        });
+        // Map to names and ensure indices are sequential
+        topics = topicDocs.map(doc => doc.data().name);
         console.log('Topics loaded from Firestore:', topics);
+        // Ensure topics array is not empty
+        if (topics.length === 0) {
+            console.warn('No valid topics found in Firestore, using fallback');
+            topics = ["Photosynthesis"];
+        }
     } catch (error) {
         console.error('Error loading topics from Firestore:', error);
         // Fallback to a default topic if Firestore fails
@@ -116,6 +131,10 @@ getDailyTopic().then(topic => {
     dailyTopic = topic;
     console.log('Daily topic:', dailyTopic);
 
+    // Clear allBlocks to ensure we start fresh
+    allBlocks = [];
+    console.log('After clearing allBlocks at start, allBlocks.length:', allBlocks.length);
+
     // Initialize game CSV data with the daily topic
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
 
@@ -124,6 +143,7 @@ getDailyTopic().then(topic => {
     topicBlock = initialBlock; // Set as the selected block
     allBlocks.push(initialBlock);
     blockGroup.appendChild(initialBlock);
+    console.log('After adding initial block, allBlocks.length:', allBlocks.length);
 
     // Apply hover effect to the initial block
     addHoverEffect(initialBlock);
@@ -147,11 +167,15 @@ getDailyTopic().then(topic => {
     console.error('Error setting daily topic:', error);
     // Fallback to a default topic if loading fails
     dailyTopic = "Photosynthesis";
+    // Clear allBlocks to ensure we start fresh
+    allBlocks = [];
+    console.log('After clearing allBlocks at start (catch), allBlocks.length:', allBlocks.length);
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
     const initialBlock = createNewBlock(dailyTopic);
     topicBlock = initialBlock; // Set as the selected block
     allBlocks.push(initialBlock);
     blockGroup.appendChild(initialBlock);
+    console.log('After adding initial block (catch), allBlocks.length:', allBlocks.length);
 
     // Apply hover effect to the initial block
     addHoverEffect(initialBlock);
@@ -593,7 +617,7 @@ function updateConnectedLines(block) {
 async function resetGame() {
     // Clear all blocks and lines
     allBlocks.length = 0;
-    
+    console.log('After clearing allBlocks, allBlocks.length:', allBlocks.length);
     // Remove all blocks and lines from SVG
     blockGroup.innerHTML = '';
     lineGroup.innerHTML = '';
@@ -614,6 +638,7 @@ async function resetGame() {
     const initialBlock = createNewBlock(dailyTopic);
     blockGroup.appendChild(initialBlock);
     allBlocks.push(initialBlock);
+    console.log('After adding initial block in resetGame, allBlocks.length:', allBlocks.length);
     topicBlock = initialBlock; // Ensure the initial block is selected
     
     // Reset follow-mouse state
