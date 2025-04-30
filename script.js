@@ -89,6 +89,15 @@ async function loadTopics() {
         topics = ["Photosynthesis"];
     }
 }
+// Function to calculate the day of the year (1 to 365/366)
+function getDayOfYear(date) {
+    const startOfYear = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const diff = date - startOfYear;
+    const oneDay = 1000 * 60 * 60 * 24; // Milliseconds in a day
+    const dayOfYear = Math.floor(diff / oneDay) + 1; // Add 1 to make it 1-based (Jan 1 = 1)
+    console.log(`Day of the year: ${dayOfYear}`);
+    return dayOfYear;
+}
 // Function to get the daily topic
 async function getDailyTopic() {
     // Ensure topics are loaded
@@ -96,16 +105,11 @@ async function getDailyTopic() {
         await loadTopics();
     }
 
-    const startDate = new Date('2025-01-01T00:00:00Z'); // Fixed start date (UTC)
     const now = new Date();
+    const dayOfYear = getDayOfYear(now); // Get the day of the year (1 to 365/366)
     
-    // Calculate the number of days since the start date
-    const utcStartDate = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate());
-    const utcNow = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const daysSinceStart = Math.floor((utcNow - utcStartDate) / (1000 * 60 * 60 * 24));
-    
-    // Use the day offset to select a topic index (cycle through the list)
-    const topicIndex = daysSinceStart % topics.length;
+    // Use the day of the year to select a topic index (cycle through the list)
+    const topicIndex = (dayOfYear - 1) % topics.length; // Subtract 1 to make it 0-based for indexing
     
     // Get the topic name for the calculated index
     const topicName = topics[topicIndex];
