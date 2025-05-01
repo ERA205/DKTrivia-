@@ -14,6 +14,9 @@ const firebaseConfig = {
   // Initialize Firebase Authentication
   const auth = firebase.auth();
 
+  // Initialize Google Auth Provider
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
   // Initialize Firestore
 const db = firebase.firestore();
 
@@ -1428,7 +1431,7 @@ document.getElementById('profile-button').addEventListener('click', () => {
     popup.className = 'popup';
     
     if (!currentUser) {
-        // User is not signed in; show sign-up and login form
+        // User is not signed in; show email/password fields and Google Sign-In button
         popup.innerHTML = `
             <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Profile</p>
             <div style="text-align: left; padding: 0 20px;">
@@ -1437,12 +1440,26 @@ document.getElementById('profile-button').addEventListener('click', () => {
                 <label for="auth-password">Password:</label><br>
                 <input type="password" id="auth-password" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter your password"><br>
             </div>
-            <button id="signup-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Sign Up</button>
+            <button id="google-signin-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto;">Sign in with Google</button>
+            <button id="signup-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Create Account</button>
             <button id="login-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px; margin-left: 10px;">Log In</button>
             <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
         `;
         
-        // Add event listener for sign-up button
+        // Add event listener for Google Sign-In button
+        popup.querySelector('#google-signin-button').addEventListener('click', () => {
+            auth.signInWithPopup(googleProvider)
+                .then(userCredential => {
+                    console.log('User signed in with Google:', userCredential.user.email);
+                    popup.remove();
+                })
+                .catch(error => {
+                    console.error('Google Sign-In error:', error.message);
+                    alert(`Error: ${error.message}`);
+                });
+        });
+
+        // Add event listener for create account button
         popup.querySelector('#signup-button').addEventListener('click', () => {
             const email = popup.querySelector('#auth-email').value;
             const password = popup.querySelector('#auth-password').value;
@@ -1510,7 +1527,6 @@ document.getElementById('profile-button').addEventListener('click', () => {
         db.collection('gameSessions')
             .where('userIdentifier', '==', currentUser.uid)
             .orderBy('timestamp', 'desc')
-            .limit(5) // Limit to the 5 most recent games
             .get()
             .then(querySnapshot => {
                 const gameHistoryBody = popup.querySelector('#game-history');
