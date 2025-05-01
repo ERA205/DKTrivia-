@@ -1147,71 +1147,77 @@ input.addEventListener('keydown', async (e) => {
             return;
         }
 
+        // Check if the article title starts with "List" (case-insensitive)
+        if (subjectTitle.toLowerCase().startsWith('list')) {
+            showPopup('List Articles cannot create a new Block');
+            return;
+        }
+
         const hasLink = await checkWikitextForLink(subjectTitle, topicText);
         if (!hasLink) {
             showPopup('Input does not match. Try again.');
             return;
         }
 
-       // Calculate Ratio and score
-const subjectViewsStr = await fetchAverageMonthlyViews(subjectTitle);
-const topicViewsStr = await fetchAverageMonthlyViews(topicText);
-let points = 0;
-let baseRatio = 0;
-let adjustedRatio = 0;
-if (subjectViewsStr !== 'N/A' && topicViewsStr !== 'N/A') {
-    const subjectViews = parseFloat(subjectViewsStr.replace(/,/g, ''));
-    const topicViews = parseFloat(topicViewsStr.replace(/,/g, ''));
-    if (topicViews > 0) {
-        baseRatio = subjectViews / topicViews;
-        // Get topic block’s Ratio from gameCsvData
-        const topicData = gameCsvData.find(data => data.article === topicText);
-        const topicRatio = topicData ? topicData.ratio : 1; // Default to 1 if not found
-        // Conditionally adjust the ratio based on the previous block's ratio
-        if (topicRatio > 1) {
-            adjustedRatio = baseRatio; // Do not multiply if previous ratio is greater than 1
-            console.log(`Previous ratio ${topicRatio} > 1, using base ratio: ${baseRatio}`);
+        // Calculate Ratio and score
+        const subjectViewsStr = await fetchAverageMonthlyViews(subjectTitle);
+        const topicViewsStr = await fetchAverageMonthlyViews(topicText);
+        let points = 0;
+        let baseRatio = 0;
+        let adjustedRatio = 0;
+        if (subjectViewsStr !== 'N/A' && topicViewsStr !== 'N/A') {
+            const subjectViews = parseFloat(subjectViewsStr.replace(/,/g, ''));
+            const topicViews = parseFloat(topicViewsStr.replace(/,/g, ''));
+            if (topicViews > 0) {
+                baseRatio = subjectViews / topicViews;
+                // Get topic block’s Ratio from gameCsvData
+                const topicData = gameCsvData.find(data => data.article === topicText);
+                const topicRatio = topicData ? topicData.ratio : 1; // Default to 1 if not found
+                // Conditionally adjust the ratio based on the previous block's ratio
+                if (topicRatio > 1) {
+                    adjustedRatio = baseRatio; // Do not multiply if previous ratio is greater than 1
+                    console.log(`Previous ratio ${topicRatio} > 1, using base ratio: ${baseRatio}`);
+                } else {
+                    adjustedRatio = baseRatio * topicRatio; // Multiply if previous ratio is <= 1
+                    console.log(`Previous ratio ${topicRatio} <= 1, multiplying: Base Ratio=${baseRatio}, Topic Ratio=${topicRatio}, Adjusted Ratio=${adjustedRatio}`);
+                }
+                
+                // Award points based on adjusted Ratio
+                if (adjustedRatio > 1) points = 1;
+                else if (adjustedRatio > 0.95) points = 2;
+                else if (adjustedRatio > 0.90) points = 3;
+                else if (adjustedRatio > 0.85) points = 4;
+                else if (adjustedRatio > 0.80) points = 5;
+                else if (adjustedRatio > 0.75) points = 7;
+                else if (adjustedRatio > 0.70) points = 9;
+                else if (adjustedRatio > 0.65) points = 12;
+                else if (adjustedRatio > 0.60) points = 15;
+                else if (adjustedRatio > 0.55) points = 19;
+                else if (adjustedRatio > 0.50) points = 23;
+                else if (adjustedRatio > 0.45) points = 27;
+                else if (adjustedRatio > 0.40) points = 32;
+                else if (adjustedRatio > 0.35) points = 37;
+                else if (adjustedRatio > 0.30) points = 43;
+                else if (adjustedRatio > 0.25) points = 48;
+                else if (adjustedRatio > 0.20) points = 55;
+                else if (adjustedRatio > 0.15) points = 61;
+                else if (adjustedRatio > 0.10) points = 68;
+                else if (adjustedRatio > 0.05) points = 76;
+                else if (adjustedRatio > 0.025) points = 83;
+                else if (adjustedRatio > 0.01) points = 91;
+                else if (adjustedRatio > 0) points = 100;
+                
+                totalScore += points;
+                lastBlockPoints = points;
+                console.log(`Points awarded: ${points}, Total Score: ${totalScore}, Last Block Points: ${lastBlockPoints}`);
+            } else {
+                console.log(`Topic views are zero for "${topicText}", no points awarded`);
+                lastBlockPoints = 0;
+            }
         } else {
-            adjustedRatio = baseRatio * topicRatio; // Multiply if previous ratio is <= 1
-            console.log(`Previous ratio ${topicRatio} <= 1, multiplying: Base Ratio=${baseRatio}, Topic Ratio=${topicRatio}, Adjusted Ratio=${adjustedRatio}`);
+            console.log(`No valid views data for ${subjectTitle} or ${topicText}, no points awarded`);
+            lastBlockPoints = 0;
         }
-        
-        // Award points based on adjusted Ratio
-        if (adjustedRatio > 1) points = 1;
-        else if (adjustedRatio > 0.95) points = 2;
-        else if (adjustedRatio > 0.90) points = 3;
-        else if (adjustedRatio > 0.85) points = 4;
-        else if (adjustedRatio > 0.80) points = 5;
-        else if (adjustedRatio > 0.75) points = 7;
-        else if (adjustedRatio > 0.70) points = 9;
-        else if (adjustedRatio > 0.65) points = 12;
-        else if (adjustedRatio > 0.60) points = 15;
-        else if (adjustedRatio > 0.55) points = 19;
-        else if (adjustedRatio > 0.50) points = 23;
-        else if (adjustedRatio > 0.45) points = 27;
-        else if (adjustedRatio > 0.40) points = 32;
-        else if (adjustedRatio > 0.35) points = 37;
-        else if (adjustedRatio > 0.30) points = 43;
-        else if (adjustedRatio > 0.25) points = 48;
-        else if (adjustedRatio > 0.20) points = 55;
-        else if (adjustedRatio > 0.15) points = 61;
-        else if (adjustedRatio > 0.10) points = 68;
-        else if (adjustedRatio > 0.05) points = 76;
-        else if (adjustedRatio > 0.025) points = 83;
-        else if (adjustedRatio > 0.01) points = 91;
-        else if (adjustedRatio > 0) points = 100;
-        
-        totalScore += points;
-        lastBlockPoints = points;
-        console.log(`Points awarded: ${points}, Total Score: ${totalScore}, Last Block Points: ${lastBlockPoints}`);
-    } else {
-        console.log(`Topic views are zero for "${topicText}", no points awarded`);
-        lastBlockPoints = 0;
-    }
-} else {
-    console.log(`No valid views data for ${subjectTitle} or ${topicText}, no points awarded`);
-    lastBlockPoints = 0;
-}
 
         // Add block data to CSV
         const views = subjectViewsStr !== 'N/A' ? parseFloat(subjectViewsStr.replace(/,/g, '')) : 0;
