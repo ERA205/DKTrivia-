@@ -20,6 +20,9 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
   // Initialize Firestore
 const db = firebase.firestore();
 
+// Initialize Firebase Analytics
+const analytics = firebase.analytics();
+
   // Track the current user
 let currentUser = null;
 
@@ -204,6 +207,11 @@ getDailyTopic().then(topic => {
     // Display the main image for the initial block (initial selection)
     displayMainImage(dailyTopic);
 
+// Log game start event
+analytics.logEvent('game_start', {
+    initial_block: dailyTopic,
+    user_id: currentUser ? currentUser.uid : 'anonymous'
+});
     // Set up click handler for the initial block
     initialBlock.addEventListener('click', () => {
         // Only update if the clicked block is not already the selected topicBlock
@@ -577,6 +585,11 @@ async function getWikipediaArticleTitle(searchTerm) {
         return null;
     } catch (error) {
         console.error(`Error fetching article title for "${searchTerm}":`, error);
+        analytics.logEvent('error', {
+            action: 'fetch_wikipedia_article',
+            error_message: error.message,
+            search_term: searchTerm
+        });
         return null;
     }
 }
@@ -844,6 +857,12 @@ async function displayMainImage(articleTitle) {
         visitButton.addEventListener('click', () => {
             const wikiUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(articleTitle.replace(/\s+/g, '_'))}`;
             window.open(wikiUrl, '_blank');
+          // Log game complete event
+        analytics.logEvent('game_complete', {
+        score: totalScore,
+        initial_block: initialBlockTitle,
+        user_id: currentUser ? currentUser.uid : userIdentifier
+});  
         });
         gameWindow.appendChild(visitButton);
     }
@@ -1451,10 +1470,18 @@ document.getElementById('profile-button').addEventListener('click', () => {
             auth.signInWithPopup(googleProvider)
                 .then(userCredential => {
                     console.log('User signed in with Google:', userCredential.user.email);
+                    analytics.logEvent('sign_up', {
+                        method: 'google',
+                        user_id: userCredential.user.uid
+                    });
                     popup.remove();
                 })
                 .catch(error => {
                     console.error('Google Sign-In error:', error.message);
+                    analytics.logEvent('error', {
+                        action: 'sign_in_google',
+                        error_message: error.message
+                    });
                     alert(`Error: ${error.message}`);
                 });
         });
@@ -1472,10 +1499,18 @@ document.getElementById('profile-button').addEventListener('click', () => {
             auth.createUserWithEmailAndPassword(email, password)
                 .then(userCredential => {
                     console.log('User signed up:', userCredential.user.email);
+                    analytics.logEvent('sign_up', {
+                        method: 'email',
+                        user_id: userCredential.user.uid
+                    });
                     popup.remove();
                 })
                 .catch(error => {
                     console.error('Sign-up error:', error.message);
+                    analytics.logEvent('error', {
+                        action: 'sign_up',
+                        error_message: error.message
+                    });
                     alert(`Error: ${error.message}`);
                 });
         });
@@ -1493,10 +1528,18 @@ document.getElementById('profile-button').addEventListener('click', () => {
             auth.signInWithEmailAndPassword(email, password)
                 .then(userCredential => {
                     console.log('User logged in:', userCredential.user.email);
+                    analytics.logEvent('login', {
+                        method: 'email',
+                        user_id: userCredential.user.uid
+                    });
                     popup.remove();
                 })
                 .catch(error => {
                     console.error('Login error:', error.message);
+                    analytics.logEvent('error', {
+                        action: 'login_email',
+                        error_message: error.message
+                    });
                     alert(`Error: ${error.message}`);
                 });
         });
