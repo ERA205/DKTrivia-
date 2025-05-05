@@ -59,6 +59,7 @@ let lastBlockPoints = 0;
 let topicBlock = null;
 let gameCsvData = [];
 let movableBlock = null; // For tracking the block being dragged
+let initialBlock = null; // Reference to the initial block
 
 // Canvas dragging variables
 let isDragging = false;
@@ -195,33 +196,35 @@ getDailyTopic().then(topic => {
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
 
     // Create the initial block with the daily topic
-    const initialBlock = createNewBlock(dailyTopic);
-    topicBlock = initialBlock; // Set as the selected block
-    allBlocks.push(initialBlock);
-    blockGroup.appendChild(initialBlock);
+    const initialBlockLocal = createNewBlock(dailyTopic);
+    topicBlock = initialBlockLocal; // Set as the selected block
+    initialBlock = initialBlockLocal; // Store reference to initial block
+    allBlocks.push(initialBlockLocal);
+    blockGroup.appendChild(initialBlockLocal);
     console.log('After adding initial block, allBlocks.length:', allBlocks.length);
 
     // Apply hover effect to the initial block
-    addHoverEffect(initialBlock);
+    addHoverEffect(initialBlockLocal);
 
     // Display the main image for the initial block (initial selection)
     displayMainImage(dailyTopic);
 
-// Log game start event
-analytics.logEvent('game_start', {
-    initial_block: dailyTopic,
-    user_id: currentUser ? currentUser.uid : 'anonymous'
-});
+    // Log game start event
+    analytics.logEvent('game_start', {
+        initial_block: dailyTopic,
+        user_id: currentUser ? currentUser.uid : 'anonymous'
+    });
+
     // Set up click handler for the initial block
-    initialBlock.addEventListener('click', () => {
+    initialBlockLocal.addEventListener('click', () => {
         // Only update if the clicked block is not already the selected topicBlock
-        if (topicBlock !== initialBlock) {
-            topicBlock = initialBlock;
+        if (topicBlock !== initialBlockLocal) {
+            topicBlock = initialBlockLocal;
             updateBlockStrokes();
             viewBox.minX = 5000 - viewBox.width / 2;
             viewBox.minY = 5000 - viewBox.height / 2;
             updateViewBox();
-            displayMainImage(initialBlock.querySelector('text').textContent);
+            displayMainImage(initialBlockLocal.querySelector('text').textContent);
         }
     });
 }).catch(error => {
@@ -232,28 +235,35 @@ analytics.logEvent('game_start', {
     allBlocks = [];
     console.log('After clearing allBlocks at start (catch), allBlocks.length:', allBlocks.length);
     gameCsvData = [{ article: dailyTopic, ratio: 1, pointsEarned: 0, views: 0 }];
-    const initialBlock = createNewBlock(dailyTopic);
-    topicBlock = initialBlock; // Set as the selected block
-    allBlocks.push(initialBlock);
-    blockGroup.appendChild(initialBlock);
+    const initialBlockLocal = createNewBlock(dailyTopic);
+    topicBlock = initialBlockLocal; // Set as the selected block
+    initialBlock = initialBlockLocal; // Store reference to initial block
+    allBlocks.push(initialBlockLocal);
+    blockGroup.appendChild(initialBlockLocal);
     console.log('After adding initial block (catch), allBlocks.length:', allBlocks.length);
 
     // Apply hover effect to the initial block
-    addHoverEffect(initialBlock);
+    addHoverEffect(initialBlockLocal);
 
     // Display the main image for the initial block (initial selection)
     displayMainImage(dailyTopic);
 
+    // Log game start event
+    analytics.logEvent('game_start', {
+        initial_block: dailyTopic,
+        user_id: currentUser ? currentUser.uid : 'anonymous'
+    });
+
     // Set up click handler for the initial block
-    initialBlock.addEventListener('click', () => {
+    initialBlockLocal.addEventListener('click', () => {
         // Only update if the clicked block is not already the selected topicBlock
-        if (topicBlock !== initialBlock) {
-            topicBlock = initialBlock;
+        if (topicBlock !== initialBlockLocal) {
+            topicBlock = initialBlockLocal;
             updateBlockStrokes();
             viewBox.minX = 5000 - viewBox.width / 2;
             viewBox.minY = 5000 - viewBox.height / 2;
             updateViewBox();
-            displayMainImage(initialBlock.querySelector('text').textContent);
+            displayMainImage(initialBlockLocal.querySelector('text').textContent);
         }
     });
 });
@@ -291,6 +301,25 @@ function updateBlockStrokes() {
         const path = b.querySelector('path');
         path.setAttribute('stroke', b === topicBlock ? '#6273B4' : '#000000');
     });
+}
+// Function to count blocks directly connected to the initial block
+function countBlocksConnectedToInitial() {
+    if (!initialBlock) {
+        console.warn('Initial block not set');
+        return 0;
+    }
+    const lines = lineGroup.querySelectorAll('line');
+    let connectedBlocks = new Set();
+    lines.forEach(line => {
+        if (line.block1 === initialBlock && line.block2 !== initialBlock) {
+            connectedBlocks.add(line.block2);
+        } else if (line.block2 === initialBlock && line.block1 !== initialBlock) {
+            connectedBlocks.add(line.block1);
+        }
+    });
+    const count = connectedBlocks.size;
+    console.log(`Number of blocks directly connected to initial block: ${count}`);
+    return count;
 }
 // Function to recalculate ranks for all game sessions with the same initialBlock
 async function recalculateRanks(initialBlockTitle) {
@@ -684,6 +713,7 @@ async function resetGame() {
     // Clear all blocks and lines
     allBlocks.length = 0;
     console.log('After clearing allBlocks, allBlocks.length:', allBlocks.length);
+    
     // Remove all blocks and lines from SVG
     blockGroup.innerHTML = '';
     lineGroup.innerHTML = '';
@@ -701,16 +731,17 @@ async function resetGame() {
     topicBlock = null;
 
     // Create a new initial block with the daily topic
-    const initialBlock = createNewBlock(dailyTopic);
-    blockGroup.appendChild(initialBlock);
-    allBlocks.push(initialBlock);
+    const initialBlockLocal = createNewBlock(dailyTopic);
+    blockGroup.appendChild(initialBlockLocal);
+    allBlocks.push(initialBlockLocal);
     console.log('After adding initial block in resetGame, allBlocks.length:', allBlocks.length);
-    topicBlock = initialBlock; // Ensure the initial block is selected
+    topicBlock = initialBlockLocal; // Ensure the initial block is selected
+    initialBlock = initialBlockLocal; // Update reference to initial block
     
     // Reset follow-mouse state
-    initialBlock.isFollowingMouse = false;
+    initialBlockLocal.isFollowingMouse = false;
     movableBlock = null;
-    
+     
     // Update block strokes to reflect the selected state
     updateBlockStrokes();
 
@@ -719,11 +750,17 @@ async function resetGame() {
     const views = viewsStr !== 'N/A' ? parseFloat(viewsStr.replace(/,/g, '')) : 0;
     gameCsvData[0].views = views;
     console.log('Game reset, CSV initialized:', generateCsvContent());
-    displayMainImage(initialBlock.querySelector('text').textContent, 0);
+    displayMainImage(initialBlockLocal.querySelector('text').textContent, 0);
 
     // Debug: Check if any lines exist after reset
     const linesAfterReset = lineGroup.querySelectorAll('line');
     console.log('Lines after reset:', linesAfterReset.length, linesAfterReset);
+
+    // Log game start event after reset
+    analytics.logEvent('game_start', {
+        initial_block: dailyTopic,
+        user_id: currentUser ? currentUser.uid : 'anonymous'
+    });
 
     // Show the text input box
     input.style.display = 'block';
@@ -1266,12 +1303,21 @@ input.addEventListener('keydown', async (e) => {
             const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
             const isAnonymous = !currentUser;
             const initialBlockTitle = gameCsvData[0].article; // Initial block title (e.g., "Wright brothers")
+            // Calculate penalty for insufficient connections to initial block
+            const connectedCount = countBlocksConnectedToInitial();
+            let penaltyPoints = 0;
+            if (connectedCount < 3) {
+            const blocksUnderThreshold = 3 - connectedCount;
+            penaltyPoints = blocksUnderThreshold * -100;
+            console.log(`Applying penalty: ${penaltyPoints} points (${blocksUnderThreshold} blocks under threshold of 3)`);
+        }
 
+        const finalScore = totalScore + penaltyPoints;
             // Save game data to Firestore
             const gameData = {
                 userIdentifier: userIdentifier,
                 isAnonymous: isAnonymous,
-                score: totalScore,
+                score: finalScore,
                 initialBlock: initialBlockTitle,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
@@ -1285,7 +1331,12 @@ input.addEventListener('keydown', async (e) => {
                 .catch(error => {
                     console.error('Error saving game session to Firestore:', error);
                 });
-
+                // Log game complete event with final score
+    analytics.logEvent('game_complete', {
+        score: finalScore,
+        initial_block: initialBlockTitle,
+        user_id: currentUser ? currentUser.uid : userIdentifier
+    });
             // Recalculate ranks for all sessions with the same initialBlock
             await recalculateRanks(initialBlockTitle);
 
@@ -1310,11 +1361,24 @@ input.addEventListener('keydown', async (e) => {
             message.style.margin = '0 0 10px 0';
             popup.appendChild(message);
 
-            // Add total score and rank display
-            const scoreText = document.createElement('p');
-            scoreText.style.margin = '0 0 5px 0';
-            scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
-            popup.appendChild(scoreText);
+        // Add total score before penalty
+    const scoreText = document.createElement('p');
+    scoreText.style.margin = '0 0 5px 0';
+    scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
+    popup.appendChild(scoreText);
+
+    // Add penalty points in red
+    const penaltyText = document.createElement('p');
+    penaltyText.style.margin = '0 0 5px 0';
+    penaltyText.innerHTML = `Penalty Points: <span style="color: red;">${penaltyPoints}</span>`;
+    popup.appendChild(penaltyText);
+
+    // Add final score after penalty
+    const finalScoreText = document.createElement('p');
+    finalScoreText.style.margin = '0 0 5px 0';
+    finalScoreText.innerHTML = `Final Score: <span style="color: #6273B4;">${finalScore}</span>`;
+    popup.appendChild(finalScoreText);
+            
 
             // Fetch the updated rank after recalculation
             let rank = 0;
@@ -1434,6 +1498,7 @@ document.getElementById('how-to-play-button').addEventListener('click', () => {
             <li>Start with the given topic Block.</li>
             <li>Add new Blocks by typing a related topic in the text box and pressing Enter.</li>
             <li>The new topic must be linked to the topic Block's Wikipedia or vice versa.</li>
+            <li>At Least 3 of your Blocks must be connected to the first Block or a penalty will be added.</li>
             <li>Add 10 Blocks to complete the game.</li>
             <li>The more niche the topic the more points you earn.</li>
             <li>For example, if the Topic Block is <span style="color: #6273B4;">New York City</span>, an acceptable answer would be <span style="color: #6273B4;"> The Empire State Buildng </span> or the <span style="color: #6273B4;">NYC Marathon</span>.</li>
