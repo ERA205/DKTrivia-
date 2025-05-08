@@ -1,4 +1,4 @@
-// Firebase Configuration (Replace with your Firebase config)
+// Firebase Configuration
 const firebaseConfig = {
     apiKey: "FIREBASE_API_KEY_PLACEHOLDER",
     authDomain: "FIREBASE_AUTH_DOMAIN_PLACEHOLDER",
@@ -98,13 +98,16 @@ function startNewGame() {
     gameRef.set(gameData).then(() => {
         showShareLinkPopup(gameId);
         listenForGameUpdates();
+    }).catch((error) => {
+        console.error('Error starting new game:', error);
+        showPopup('Error starting new game. Please try again.');
     });
 }
 
 // Function to join an existing game
 function joinGame(gameId) {
     gameRef = database.ref(`territory_games/${gameId}`);
-    gameRef.once('value', (snapshot) => {
+    gameRef.once('value').then((snapshot) => {
         const gameData = snapshot.val();
         if (!gameData) {
             showPopup('Game not found. Starting a new game.');
@@ -124,9 +127,16 @@ function joinGame(gameId) {
                 'players/player2': currentUser.uid,
                 status: 'active',
                 currentTurn: Math.random() < 0.5 ? 'player1' : 'player2' // Randomly choose first player
+            }).then(() => {
+                listenForGameUpdates();
+            }).catch((error) => {
+                console.error('Error joining game:', error);
+                showPopup('Error joining game. Please try again.');
             });
         }
-        listenForGameUpdates();
+    }).catch((error) => {
+        console.error('Error checking game state:', error);
+        showPopup('Error joining game. Please try again.');
     });
 }
 
@@ -170,6 +180,9 @@ function listenForGameUpdates() {
             `);
             gameRef.off(); // Stop listening for updates
         }
+    }, (error) => {
+        console.error('Error listening for game updates:', error);
+        showPopup('Error loading game updates. Please try again.');
     });
 }
 
@@ -320,7 +333,7 @@ async function checkWikitextForLink(subjectTitle, topicTitle) {
     const topicUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(topicTitle)}&prop=wikitext&format=json&origin=*`;
     let hyperlinks = [];
 
-    function extractHyperlinks(wikitext, articleTitle) {
+    async function extractHyperlinks(wikitext, articleTitle) {
         const refIndex = wikitext.search(/==\s*References\s*==|==\s*See also\s*==|<references\s*\/>|{{Reflist}}/i);
         const relevantText = refIndex === -1 ? wikitext : wikitext.substring(0, refIndex);
         const linkPattern = /\[\[([^\]\|]+)(?:\|[^\]]*)*\]\]/g;
@@ -346,7 +359,7 @@ async function checkWikitextForLink(subjectTitle, topicTitle) {
         const subjectData = await subjectResponse.json();
         if (!subjectData.error) {
             const subjectWikitext = subjectData.parse.wikitext['*'];
-            subjectLinks = extractHyperlinks(subjectWikitext, subjectTitle);
+            subjectLinks = await extractHyperlinks(subjectWikitext, subjectTitle);
         } else {
             console.error('Subject API error:', subjectData.error);
         }
@@ -356,7 +369,7 @@ async function checkWikitextForLink(subjectTitle, topicTitle) {
         const topicData = await topicResponse.json();
         if (!topicData.error) {
             const topicWikitext = topicData.parse.wikitext['*'];
-            topicLinks = extractHyperlinks(topicWikitext, topicTitle);
+            topicLinks = await extractHyperlinks(topicWikitext, topicTitle);
         } else {
             console.error('Topic API error:', topicData.error);
         }
@@ -452,6 +465,9 @@ function generateGrid() {
                             col: col,
                             article: cellData.article
                         }
+                    }).catch((error) => {
+                        console.error('Error updating topic block:', error);
+                        showPopup('Error updating topic block. Please try again.');
                     });
                     currentTopicArticle = cellData.article;
                     currentTopicCell = cell;
@@ -573,7 +589,7 @@ input.addEventListener('keydown', async (e) => {
         // Check if a grid cell is selected
         if (!selectedCell) {
             showPopup('Please Select a Grid Location');
-            input.value = ''; // Clear the input
+            input.value = '';
             return;
         }
 
@@ -581,7 +597,7 @@ input.addEventListener('keydown', async (e) => {
         const articleTitle = await getWikipediaArticleTitle(userInput);
         if (!articleTitle) {
             showPopup('No matching Wikipedia article found. Try again.');
-            input.value = ''; // Clear the input
+            input.value = '';
             return;
         }
 
@@ -643,71 +659,79 @@ input.addEventListener('keydown', async (e) => {
             connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
         };
 
-        // Update scores
-        const newScores = { ...gameRef.val()?.scores || { player1: 0, player2: 0 } };
-        newScores[playerNumber] = (newScores[playerNumber] || 0) + 1;
+        // Read the current game state to update scores and grid
+        gameRef.once('value').then(async (snapshot) => {
+            const gameData = snapshot.val() || { scores: { player1: 0, player2: 0 }, grid: Array(5).fill().map(() => Array(5).fill(null)) };
 
-        // Switch turns
-        const nextTurn = playerNumber === 'player1' ? 'player2' : 'player1';
+            // Update scores
+            const newScores = { ...gameData.scores };
+            newScores[playerNumber] = (newScores[playerNumber] || 0) + 1;
 
-        // Check if the grid is full
-        let filledCellsCount = 0;
-        const currentGrid = gameRef.val()?.grid || Array(5).fill().map(() => Array(5).fill(null));
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
-                if (currentGrid[r][c]) filledCellsCount++;
+            // Switch turns
+            const nextTurn = playerNumber === 'player1' ? 'player2' : 'player1';
+
+            // Check if the grid is full
+            let filledCellsCount = 0;
+            const currentGrid = gameData.grid;
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    if (currentGrid[r][c]) filledCellsCount++;
+                }
             }
-        }
-        filledCellsCount++; // Include the cell we're about to add
+            filledCellsCount++; // Include the cell we're about to add
 
-        const updates = {
-            ...gridUpdate,
-            currentTurn: nextTurn,
-            scores: newScores,
-            topicBlock: {
-                row: row,
-                col: col,
-                article: articleTitle
+            const updates = {
+                ...gridUpdate,
+                currentTurn: nextTurn,
+                scores: newScores,
+                topicBlock: {
+                    row: row,
+                    col: col,
+                    article: articleTitle
+                }
+            };
+
+            if (filledCellsCount >= 25) {
+                updates.status = 'finished';
             }
-        };
 
-        if (filledCellsCount >= 25) {
-            updates.status = 'finished';
-        }
+            return gameRef.update(updates);
+        }).then(async () => {
+            // Add to CSV data
+            gameCsvData.push({
+                article: articleTitle,
+                ratio: baseRatio,
+                pointsEarned: 0, // No scoring specified beyond territory
+                views: (await fetchAverageMonthlyViews(articleTitle)).formatted
+            });
+            console.log('Updated CSV:', generateCsvContent());
 
-        await gameRef.update(updates);
+            // Update local state (will be updated via Firebase listener, but set immediately for responsiveness)
+            selectedCell.classList.remove('selected');
+            selectedCell.classList.add('filled', playerNumber);
+            const node = document.createElement('div');
+            node.classList.add('connection-node');
+            selectedCell.appendChild(node);
+            filledCells.set(selectedCell, {
+                article: articleTitle,
+                imageUrl: await fetchMainImage(articleTitle),
+                views: await fetchAverageMonthlyViews(articleTitle),
+                player: playerNumber,
+                node: node
+            });
 
-        // Add to CSV data
-        gameCsvData.push({
-            article: articleTitle,
-            ratio: baseRatio,
-            pointsEarned: 0, // No scoring specified beyond territory
-            views: (await fetchAverageMonthlyViews(articleTitle)).formatted
+            if (currentTopicCell) {
+                drawConnectionLine(currentTopicCell, selectedCell);
+            }
+
+            console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
+
+            selectedCell = null; // Deselect the cell
+            input.value = ''; // Clear the input
+        }).catch((error) => {
+            console.error('Error updating game state:', error);
+            showPopup('Error updating game state. Please try again.');
         });
-        console.log('Updated CSV:', generateCsvContent());
-
-        // Update local state (will be updated via Firebase listener, but set immediately for responsiveness)
-        selectedCell.classList.remove('selected');
-        selectedCell.classList.add('filled', playerNumber);
-        const node = document.createElement('div');
-        node.classList.add('connection-node');
-        selectedCell.appendChild(node);
-        filledCells.set(selectedCell, {
-            article: articleTitle,
-            imageUrl: await fetchMainImage(articleTitle),
-            views: await fetchAverageMonthlyViews(articleTitle),
-            player: playerNumber,
-            node: node
-        });
-
-        if (currentTopicCell) {
-            drawConnectionLine(currentTopicCell, selectedCell);
-        }
-
-        console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
-
-        selectedCell = null; // Deselect the cell
-        input.value = ''; // Clear the input
     }
 });
 
@@ -732,21 +756,27 @@ document.getElementById('how-to-play-button').addEventListener('click', () => {
 });
 
 // Initialize Firebase Authentication and start/join game
-auth.signInAnonymously().then((userCredential) => {
-    currentUser = userCredential.user;
-    console.log('Signed in anonymously:', currentUser.uid);
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        currentUser = user;
+        console.log('Signed in anonymously:', currentUser.uid);
 
-    // Check for gameId in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    gameId = urlParams.get('gameId');
+        // Check for gameId in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        gameId = urlParams.get('gameId');
 
-    if (gameId) {
-        joinGame(gameId);
+        if (gameId) {
+            joinGame(gameId);
+        } else {
+            startNewGame();
+        }
     } else {
-        startNewGame();
+        // No user is signed in, attempt to sign in anonymously
+        auth.signInAnonymously().catch((error) => {
+            console.error('Error signing in anonymously:', error);
+            showPopup('Error signing in. Please try again.');
+        });
     }
-}).catch((error) => {
-    console.error('Error signing in anonymously:', error);
 });
 
 // Initialize the game
