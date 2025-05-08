@@ -1,13 +1,13 @@
 // Firebase Configuration (Replace with your Firebase config)
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    databaseURL: "YOUR_DATABASE_URL",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
-    measurementId: "YOUR_MEASUREMENT_ID"
+    apiKey: "FIREBASE_API_KEY_PLACEHOLDER",
+    authDomain: "FIREBASE_AUTH_DOMAIN_PLACEHOLDER",
+    databaseURL: "FIREBASE_DATABASE_URL_PLACEHOLDER",
+    projectId: "FIREBASE_PROJECT_ID_PLACEHOLDER",
+    storageBucket: "FIREBASE_STORAGE_BUCKET_PLACEHOLDER",
+    messagingSenderId: "FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER",
+    appId: "FIREBASE_APP_ID_PLACEHOLDER",
+    measurementId: "FIREBASE_MEASUREMENT_ID_PLACEHOLDER"
 };
 
 // Initialize Firebase
