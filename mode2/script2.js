@@ -761,15 +761,18 @@ auth.onAuthStateChanged((user) => {
         currentUser = user;
         console.log('Signed in anonymously:', currentUser.uid);
 
-        // Check for gameId in URL
-        const urlParams = new URLSearchParams(window.location.search);
-        gameId = urlParams.get('gameId');
+        // Add a slight delay to ensure authentication state is propagated
+        setTimeout(() => {
+            // Check for gameId in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            gameId = urlParams.get('gameId');
 
-        if (gameId) {
-            joinGame(gameId);
-        } else {
-            startNewGame();
-        }
+            if (gameId) {
+                joinGame(gameId);
+            } else {
+                startNewGame();
+            }
+        }, 1000); // 1-second delay to ensure auth state is ready
     } else {
         // No user is signed in, attempt to sign in anonymously
         auth.signInAnonymously().catch((error) => {
