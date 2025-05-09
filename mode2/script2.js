@@ -24,6 +24,7 @@ const input = document.getElementById('connection-input');
 const gameWindow = document.getElementById('game-window');
 const turnIndicator = document.getElementById('turn-indicator');
 const scoreDisplay = document.getElementById('score-display');
+const startGameButton = document.getElementById('start-game-button');
 
 // Create groups for lines
 const lineGroup = document.getElementById('line-group');
@@ -49,6 +50,7 @@ let currentUser = null; // Current player's user ID
 let gameId = null; // Current game ID
 let playerNumber = null; // "player1" or "player2"
 let gameRef = null; // Firebase database reference for the game
+let gameStarted = false; // Track if the game has started
 
 // Function to generate a random game ID
 function generateGameId() {
@@ -66,6 +68,7 @@ function showPopup(message, additionalContent = null) {
     `;
     popup.querySelector('button').addEventListener('click', () => popup.remove());
     document.body.appendChild(popup);
+    return popup;
 }
 
 // Function to show the sharable link popup
@@ -82,7 +85,7 @@ function startNewGame() {
     playerNumber = 'player1';
     const gameData = {
         grid: Array(5).fill().map(() => Array(5).fill(null)), // 5x5 grid
-        currentTurn: null, // Will be set after player2 joins
+        currentTurn: null, // Will be set after both players join
         players: {
             player1: currentUser.uid,
             player2: null
@@ -98,6 +101,7 @@ function startNewGame() {
     gameRef.set(gameData).then(() => {
         showShareLinkPopup(gameId);
         listenForGameUpdates();
+        startGameButton.style.display = 'none'; // Hide the "Start Game" button after creating the game
     }).catch((error) => {
         console.error('Error starting new game:', error);
         showPopup('Error starting new game. Please try again.');
@@ -121,18 +125,19 @@ function joinGame(gameId) {
         if (gameData.players.player1 === currentUser.uid) {
             playerNumber = 'player1';
             showShareLinkPopup(gameId);
-        } else {
+        } else if (!gameData.players.player2) {
             playerNumber = 'player2';
             gameRef.update({
-                'players/player2': currentUser.uid,
-                status: 'active',
-                currentTurn: Math.random() < 0.5 ? 'player1' : 'player2' // Randomly choose first player
+                'players/player2': currentUser.uid
             }).then(() => {
                 listenForGameUpdates();
+                startGameButton.style.display = 'none'; // Hide the "Start Game" button after joining
             }).catch((error) => {
                 console.error('Error joining game:', error);
                 showPopup('Error joining game. Please try again.');
             });
+        } else {
+            showPopup('Game is full.');
         }
     }).catch((error) => {
         console.error('Error checking game state:', error);
@@ -144,10 +149,17 @@ function joinGame(gameId) {
 function listenForGameUpdates() {
     gameRef.on('value', (snapshot) => {
         const gameData = snapshot.val();
-        if (!gameData) return;
+        if (!gameData) {
+            console.error('Game data is null');
+            return;
+        }
+
+        // Ensure grid is a valid 5x5 array
+        const defaultGrid = Array(5).fill().map(() => Array(5).fill(null));
+        const grid = gameData.grid && Array.isArray(gameData.grid) && gameData.grid.length === 5 ? gameData.grid : defaultGrid;
 
         // Update game state
-        updateGrid(gameData.grid);
+        updateGrid(grid);
         updateTurnIndicator(gameData.currentTurn, gameData.players);
         updateScores(gameData.scores);
 
@@ -170,6 +182,28 @@ function listenForGameUpdates() {
             displayGameWindow();
         }
 
+        // Check if both players are present and game hasn't started
+        if (gameData.players.player1 && gameData.players.player2 && gameData.status === 'waiting' && !gameStarted) {
+            // Show popup to notify both players and provide a "Start Game" button
+            const popup = showPopup('Two players have joined!', `
+                <button id="begin-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Start Game</button>
+            `);
+            document.getElementById('begin-game-button').addEventListener('click', () => {
+                gameRef.update({
+                    status: 'active',
+                    currentTurn: Math.random() < 0.5 ? 'player1' : 'player2'
+                }).then(() => {
+                    gameStarted = true;
+                    popup.remove();
+                    showPopup('Game started!');
+                    input.disabled = false; // Enable input for gameplay
+                }).catch((error) => {
+                    console.error('Error starting game:', error);
+                    showPopup('Error starting game. Please try again.');
+                });
+            });
+        }
+
         // Check game status
         if (gameData.status === 'finished') {
             const winner = gameData.scores.player1 > gameData.scores.player2 ? 'Player 1' : 
@@ -188,7 +222,19 @@ function listenForGameUpdates() {
 
 // Function to update the grid based on Firebase data
 function updateGrid(grid) {
+    // Ensure grid is a valid 5x5 array
+    if (!grid || !Array.isArray(grid) || grid.length !== 5) {
+        console.error('Invalid grid data:', grid);
+        grid = Array(5).fill().map(() => Array(5).fill(null));
+    }
+
     for (let row = 0; row < 5; row++) {
+        // Ensure grid[row] is a valid array
+        if (!Array.isArray(grid[row]) || grid[row].length !== 5) {
+            console.error(`Invalid grid row ${row}:`, grid[row]);
+            grid[row] = Array(5).fill(null);
+        }
+
         for (let col = 0; col < 5; col++) {
             const cell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
             const cellData = grid[row][col];
@@ -755,6 +801,15 @@ document.getElementById('how-to-play-button').addEventListener('click', () => {
     document.body.appendChild(popup);
 });
 
+// Handle "Start Game" button click
+startGameButton.addEventListener('click', () => {
+    if (!currentUser) {
+        showPopup('Please wait, signing in...');
+        return;
+    }
+    startNewGame();
+});
+
 // Initialize Firebase Authentication and start/join game
 auth.onAuthStateChanged((user) => {
     if (user) {
@@ -769,8 +824,6 @@ auth.onAuthStateChanged((user) => {
 
             if (gameId) {
                 joinGame(gameId);
-            } else {
-                startNewGame();
             }
         }, 1000); // 1-second delay to ensure auth state is ready
     } else {
@@ -785,3 +838,6 @@ auth.onAuthStateChanged((user) => {
 // Initialize the game
 generateGrid();
 displayGameWindow();
+
+// Disable input until the game starts
+input.disabled = true;
