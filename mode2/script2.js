@@ -529,7 +529,6 @@ function generateGrid() {
     }
 }
 
-// Display placeholder content in the game window
 function displayGameWindow(articleData = null) {
     gameWindow.style.width = '300px';
     gameWindow.style.paddingLeft = '2%';
