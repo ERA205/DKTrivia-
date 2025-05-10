@@ -84,13 +84,13 @@ function startNewGame() {
     gameId = generateGameId();
     playerNumber = 'player1';
     const gameData = {
-        grid: Array(5).fill().map(() => Array(5).fill(null)), // 5x5 grid
-        currentTurn: null, // Will be set after both players join
+        grid: Array(5).fill().map(() => Array(5).fill(null)), // 5x5 grid with null values
+        currentTurn: null,
         players: {
             player1: currentUser.uid,
             player2: null
         },
-        topicBlock: null, // { row, col, article }
+        topicBlock: null,
         status: 'waiting',
         scores: {
             player1: 0,
@@ -151,21 +151,13 @@ function listenForGameUpdates() {
 
     gameRef.on('value', (snapshot) => {
         const gameData = snapshot.val();
-        if (!gameData) {
-            console.error('Game data is null');
-            return;
-        }
-
-        // Ensure grid is a valid 5x5 array
-        const defaultGrid = Array(5).fill().map(() => Array(5).fill(null));
-        const grid = gameData.grid && Array.isArray(gameData.grid) && gameData.grid.length === 5 ? gameData.grid : defaultGrid;
-
-        // Update game state
+        if (!gameData) return;
+    
+        const grid = gameData.grid || Array(5).fill().map(() => Array(5).fill(null));
         updateGrid(grid);
         updateTurnIndicator(gameData.currentTurn, gameData.players);
         updateScores(gameData.scores);
-
-        // Update topic block
+    
         if (gameData.topicBlock) {
             const { row, col, article } = gameData.topicBlock;
             currentTopicArticle = article;
@@ -183,10 +175,8 @@ function listenForGameUpdates() {
             currentTopicCell = null;
             displayGameWindow();
         }
-
-        // Check if both players are present and game hasn't started
+    
         if (gameData.players.player1 && gameData.players.player2 && gameData.status === 'waiting' && !gameStarted) {
-            // Show popup to notify both players and provide a "Start Game" button
             joinPopup = showPopup('Two players have joined!', `
                 <button id="begin-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Start Game</button>
             `);
@@ -197,21 +187,19 @@ function listenForGameUpdates() {
                 }).then(() => {
                     gameStarted = true;
                     showPopup('Game started!');
-                    input.disabled = false; // Enable input for gameplay
+                    input.disabled = false;
                 }).catch((error) => {
                     console.error('Error starting game:', error);
                     showPopup('Error starting game. Please try again.');
                 });
             });
         }
-
-        // Remove the join popup when the game starts
+    
         if (gameData.status === 'active' && joinPopup) {
             joinPopup.remove();
-            joinPopup = null; // Clear the reference
+            joinPopup = null;
         }
-
-        // Check game status
+    
         if (gameData.status === 'finished') {
             const winner = gameData.scores.player1 > gameData.scores.player2 ? 'Player 1' : 
                           gameData.scores.player2 > gameData.scores.player1 ? 'Player 2' : 'Tie';
@@ -219,7 +207,7 @@ function listenForGameUpdates() {
                 <p>Player 1: ${gameData.scores.player1} cells</p>
                 <p>Player 2: ${gameData.scores.player2} cells</p>
             `);
-            gameRef.off(); // Stop listening for updates
+            gameRef.off();
         }
     }, (error) => {
         console.error('Error listening for game updates:', error);
@@ -227,54 +215,33 @@ function listenForGameUpdates() {
     });
 }
 
-// Function to update the grid based on Firebase data
 function updateGrid(grid) {
-    // Ensure grid is a valid 5x5 array
-    if (!grid || !Array.isArray(grid) || grid.length !== 5) {
-        console.error('Invalid grid data:', grid);
-        grid = Array(5).fill().map(() => Array(5).fill(null));
-    }
+    // Clear existing grid visuals
+    const cells = gridContainer.querySelectorAll('.grid-cell');
+    cells.forEach(cell => {
+        cell.classList.remove('filled', 'player1', 'player2');
+        while (cell.firstChild) cell.removeChild(cell.firstChild);
+    });
+    filledCells.clear();
+    lineGroup.innerHTML = ''; // Clear connection lines
 
+    // Rebuild grid based on Firebase data
     for (let row = 0; row < 5; row++) {
-        // Ensure grid[row] is a valid array
-        if (!Array.isArray(grid[row]) || grid[row].length !== 5) {
-            console.error(`Invalid grid row ${row}:`, grid[row]);
-            grid[row] = Array(5).fill(null);
-        }
-
         for (let col = 0; col < 5; col++) {
             const cell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
             const cellData = grid[row][col];
             if (cellData) {
                 cell.classList.add('filled', cellData.player);
-                if (!filledCells.has(cell)) {
-                    filledCells.set(cell, {
-                        article: cellData.article,
-                        imageUrl: cellData.imageUrl,
-                        views: cellData.views,
-                        player: cellData.player,
-                        node: null // Node will be added below
-                    });
-                    const node = document.createElement('div');
-                    node.classList.add('connection-node');
-                    cell.appendChild(node);
-                    filledCells.get(cell).node = node;
+                const node = document.createElement('div');
+                node.classList.add('connection-node');
+                cell.appendChild(node);
+                filledCells.set(cell, { ...cellData, node });
 
-                    // Draw lines if this cell connects to the topic block
-                    if (cellData.connectionTo) {
-                        const [fromRow, fromCol] = cellData.connectionTo;
-                        const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
-                        if (fromCell) {
-                            drawConnectionLine(fromCell, cell);
-                        }
-                    }
+                if (cellData.connectionTo) {
+                    const [fromRow, fromCol] = cellData.connectionTo;
+                    const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
+                    if (fromCell) drawConnectionLine(fromCell, cell);
                 }
-            } else {
-                cell.classList.remove('filled', 'player1', 'player2');
-                while (cell.firstChild) {
-                    cell.removeChild(cell.firstChild);
-                }
-                filledCells.delete(cell);
             }
         }
     }
@@ -702,104 +669,90 @@ input.addEventListener('keydown', async (e) => {
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
 
-        // Read the current game state to update scores and grid
-        gameRef.once('value').then(async (snapshot) => {
-            const gameData = snapshot.val() || { scores: { player1: 0, player2: 0 }, grid: Array(5).fill().map(() => Array(5).fill(null)) };
+        // Read the current game state
+gameRef.once('value').then(async (snapshot) => {
+    const gameData = snapshot.val() || { 
+        scores: { player1: 0, player2: 0 }, 
+        grid: Array(5).fill().map(() => Array(5).fill(null)) 
+    };
 
-            // Ensure scores is valid
-            const scores = gameData.scores || { player1: 0, player2: 0 };
-            
-            // Update scores
-            const newScores = { ...scores };
-            newScores[playerNumber] = (newScores[playerNumber] || 0) + 1;
+    // Ensure grid is a valid 5x5 array
+    let currentGrid = gameData.grid;
+    if (!currentGrid || !Array.isArray(currentGrid) || currentGrid.length !== 5) {
+        console.error('Invalid grid data:', currentGrid);
+        currentGrid = Array(5).fill().map(() => Array(5).fill(null));
+    }
 
-            // Switch turns
-            const nextTurn = playerNumber === 'player1' ? 'player2' : 'player1';
+    // Update the specific cell in the grid
+    const row = parseInt(selectedCell.dataset.row);
+    const col = parseInt(selectedCell.dataset.col);
+    currentGrid[row][col] = {
+        article: articleTitle,
+        imageUrl: await fetchMainImage(articleTitle),
+        views: await fetchAverageMonthlyViews(articleTitle),
+        player: playerNumber,
+        connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
+    };
 
-            // Ensure grid is a valid 5x5 array
-            let currentGrid = gameData.grid;
-            if (!currentGrid || !Array.isArray(currentGrid) || currentGrid.length !== 5) {
-                console.error('Invalid grid data:', currentGrid);
-                currentGrid = Array(5).fill().map(() => Array(5).fill(null));
-            }
+    // Prepare updates
+    const updates = {
+        grid: currentGrid, // Update the entire grid array
+        currentTurn: playerNumber === 'player1' ? 'player2' : 'player1',
+        scores: { ...gameData.scores, [playerNumber]: (gameData.scores[playerNumber] || 0) + 1 },
+        topicBlock: {
+            row: row,
+            col: col,
+            article: articleTitle
+        }
+    };
 
-            // Ensure each row is a valid array
-            for (let r = 0; r < 5; r++) {
-                if (!Array.isArray(currentGrid[r]) || currentGrid[r].length !== 5) {
-                    console.error(`Invalid grid row ${r}:`, currentGrid[r]);
-                    currentGrid[r] = Array(5).fill(null);
-                }
-            }
+    // Check if the grid is full
+    let filledCellsCount = 0;
+    for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+            if (currentGrid[r][c]) filledCellsCount++;
+        }
+    }
+    if (filledCellsCount >= 25) {
+        updates.status = 'finished';
+    }
 
-            // Update the grid locally
-            currentGrid[row][col] = {
-                article: articleTitle,
-                imageUrl: await fetchMainImage(articleTitle),
-                views: await fetchAverageMonthlyViews(articleTitle),
-                player: playerNumber,
-                connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
-            };
+    // Update Firebase
+    return gameRef.update(updates);
+}).then(async () => {
+    // Local updates
+    gameCsvData.push({
+        article: articleTitle,
+        ratio: baseRatio,
+        pointsEarned: 0,
+        views: (await fetchAverageMonthlyViews(articleTitle)).formatted
+    });
+    console.log('Updated CSV:', generateCsvContent());
 
-            // Check if the grid is full
-            let filledCellsCount = 0;
-            for (let r = 0; r < 5; r++) {
-                for (let c = 0; c < 5; c++) {
-                    if (currentGrid[r][c]) filledCellsCount++;
-                }
-            }
+    selectedCell.classList.remove('selected');
+    selectedCell.classList.add('filled', playerNumber);
+    const node = document.createElement('div');
+    node.classList.add('connection-node');
+    selectedCell.appendChild(node);
+    filledCells.set(selectedCell, {
+        article: articleTitle,
+        imageUrl: await fetchMainImage(articleTitle),
+        views: await fetchAverageMonthlyViews(articleTitle),
+        player: playerNumber,
+        node: node
+    });
 
-            const updates = {
-                grid: currentGrid, // Update the entire grid array
-                currentTurn: nextTurn,
-                scores: newScores,
-                topicBlock: {
-                    row: row,
-                    col: col,
-                    article: articleTitle
-                }
-            };
+    if (currentTopicCell) {
+        drawConnectionLine(currentTopicCell, selectedCell);
+    }
 
-            if (filledCellsCount >= 25) {
-                updates.status = 'finished';
-            }
-
-            return gameRef.update(updates);
-        }).then(async () => {
-            // Add to CSV data
-            gameCsvData.push({
-                article: articleTitle,
-                ratio: baseRatio,
-                pointsEarned: 0, // No scoring specified beyond territory
-                views: (await fetchAverageMonthlyViews(articleTitle)).formatted
-            });
-            console.log('Updated CSV:', generateCsvContent());
-
-            // Update local state (will be updated via Firebase listener, but set immediately for responsiveness)
-            selectedCell.classList.remove('selected');
-            selectedCell.classList.add('filled', playerNumber);
-            const node = document.createElement('div');
-            node.classList.add('connection-node');
-            selectedCell.appendChild(node);
-            filledCells.set(selectedCell, {
-                article: articleTitle,
-                imageUrl: await fetchMainImage(articleTitle),
-                views: await fetchAverageMonthlyViews(articleTitle),
-                player: playerNumber,
-                node: node
-            });
-
-            if (currentTopicCell) {
-                drawConnectionLine(currentTopicCell, selectedCell);
-            }
-
-            console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
-
-            selectedCell = null; // Deselect the cell
-            input.value = ''; // Clear the input
-        }).catch((error) => {
-            console.error('Error updating game state:', error);
-            showPopup('Error updating game state. Please try again.');
-        });
+    console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
+    selectedCell = null;
+    input.value = '';
+}).catch((error) => {
+    console.error('Error updating game state:', error);
+    showPopup('Error updating game state. Please try again.');
+});
     }
 });
 
