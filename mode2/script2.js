@@ -147,6 +147,8 @@ function joinGame(gameId) {
 
 // Function to listen for game updates
 function listenForGameUpdates() {
+    let joinPopup = null; // Track the "Two players have joined!" popup
+
     gameRef.on('value', (snapshot) => {
         const gameData = snapshot.val();
         if (!gameData) {
@@ -185,7 +187,7 @@ function listenForGameUpdates() {
         // Check if both players are present and game hasn't started
         if (gameData.players.player1 && gameData.players.player2 && gameData.status === 'waiting' && !gameStarted) {
             // Show popup to notify both players and provide a "Start Game" button
-            const popup = showPopup('Two players have joined!', `
+            joinPopup = showPopup('Two players have joined!', `
                 <button id="begin-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Start Game</button>
             `);
             document.getElementById('begin-game-button').addEventListener('click', () => {
@@ -194,7 +196,6 @@ function listenForGameUpdates() {
                     currentTurn: Math.random() < 0.5 ? 'player1' : 'player2'
                 }).then(() => {
                     gameStarted = true;
-                    popup.remove();
                     showPopup('Game started!');
                     input.disabled = false; // Enable input for gameplay
                 }).catch((error) => {
@@ -202,6 +203,12 @@ function listenForGameUpdates() {
                     showPopup('Error starting game. Please try again.');
                 });
             });
+        }
+
+        // Remove the join popup when the game starts
+        if (gameData.status === 'active' && joinPopup) {
+            joinPopup.remove();
+            joinPopup = null; // Clear the reference
         }
 
         // Check game status
@@ -695,16 +702,6 @@ input.addEventListener('keydown', async (e) => {
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
 
-        // Update Firebase with the new block
-        const gridUpdate = {};
-        gridUpdate[`grid/${row}/${col}`] = {
-            article: articleTitle,
-            imageUrl: await fetchMainImage(articleTitle),
-            views: await fetchAverageMonthlyViews(articleTitle),
-            player: playerNumber,
-            connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
-        };
-
         // Read the current game state to update scores and grid
         gameRef.once('value').then(async (snapshot) => {
             const gameData = snapshot.val() || { scores: { player1: 0, player2: 0 }, grid: Array(5).fill().map(() => Array(5).fill(null)) };
@@ -726,23 +723,33 @@ input.addEventListener('keydown', async (e) => {
                 currentGrid = Array(5).fill().map(() => Array(5).fill(null));
             }
 
-            // Check if the grid is full
-            let filledCellsCount = 0;
+            // Ensure each row is a valid array
             for (let r = 0; r < 5; r++) {
-                // Ensure grid[r] is a valid array
                 if (!Array.isArray(currentGrid[r]) || currentGrid[r].length !== 5) {
                     console.error(`Invalid grid row ${r}:`, currentGrid[r]);
                     currentGrid[r] = Array(5).fill(null);
                 }
+            }
 
+            // Update the grid locally
+            currentGrid[row][col] = {
+                article: articleTitle,
+                imageUrl: await fetchMainImage(articleTitle),
+                views: await fetchAverageMonthlyViews(articleTitle),
+                player: playerNumber,
+                connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
+            };
+
+            // Check if the grid is full
+            let filledCellsCount = 0;
+            for (let r = 0; r < 5; r++) {
                 for (let c = 0; c < 5; c++) {
                     if (currentGrid[r][c]) filledCellsCount++;
                 }
             }
-            filledCellsCount++; // Include the cell we're about to add
 
             const updates = {
-                ...gridUpdate,
+                grid: currentGrid, // Update the entire grid array
                 currentTurn: nextTurn,
                 scores: newScores,
                 topicBlock: {
