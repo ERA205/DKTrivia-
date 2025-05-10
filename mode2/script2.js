@@ -146,43 +146,105 @@ function joinGame(gameId) {
     });
 }
 
-// Function to listen for game updates
+function updateGrid(grid) {
+    console.log('Updating grid with data:', grid);
+
+    // Clear existing grid visuals
+    const cells = gridContainer.querySelectorAll('.grid-cell');
+    cells.forEach(cell => {
+        cell.classList.remove('filled', 'player1', 'player2');
+        while (cell.firstChild) cell.removeChild(cell.firstChild);
+    });
+    filledCells.clear();
+    lineGroup.innerHTML = ''; // Clear connection lines
+
+    // Handle the grid as a flat object with "row_col" keys
+    const gridData = grid || {};
+
+    // Rebuild grid based on flat data
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 5; col++) {
+            const cell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
+            const cellKey = `${row}_${col}`;
+            const cellData = gridData[cellKey];
+            if (cellData) {
+                console.log(`Rendering cell ${cellKey}:`, cellData);
+                cell.classList.add('filled', cellData.player);
+                if (!filledCells.has(cell)) {
+                    const node = document.createElement('div');
+                    node.classList.add('connection-node');
+                    cell.appendChild(node);
+                    filledCells.set(cell, {
+                        article: cellData.article,
+                        imageUrl: cellData.imageUrl,
+                        views: cellData.views,
+                        player: cellData.player,
+                        node: node
+                    });
+
+                    // Draw lines if this cell connects to another block
+                    if (cellData.connectionTo) {
+                        const [fromRow, fromCol] = cellData.connectionTo;
+                        const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
+                        if (fromCell) {
+                            console.log(`Drawing line from ${fromRow}_${fromCol} to ${row}_${col}`);
+                            drawConnectionLine(fromCell, cell);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 function listenForGameUpdates() {
     let joinPopup = null; // Track the "Two players have joined!" popup
+
     gameRef.on('value', (snapshot) => {
         const gameData = snapshot.val();
-        if (!gameData) return;
-    
+        if (!gameData) {
+            console.log('No game data received from Firebase');
+            return;
+        }
+
+        console.log('Received Firebase update:', gameData);
+
         // Ensure turn indicator updates even if grid update fails
         updateTurnIndicator(gameData.currentTurn, gameData.players);
         updateScores(gameData.scores);
-    
+
         // Attempt to update the grid
         const grid = gameData.grid || {};
         try {
+            console.log('Calling updateGrid with grid:', grid);
             updateGrid(grid);
         } catch (error) {
             console.error('Error updating grid:', error);
         }
-    
+
+        // Update topic block and info window
         if (gameData.topicBlock) {
             const { row, col, article } = gameData.topicBlock;
             currentTopicArticle = article;
             currentTopicCell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
             const cellData = filledCells.get(currentTopicCell);
             if (cellData) {
+                console.log(`Updating info window for cell ${row}_${col}:`, cellData);
                 displayGameWindow({
                     title: cellData.article,
                     imageUrl: cellData.imageUrl,
                     views: cellData.views.formatted
                 });
+            } else {
+                console.log(`No cell data found for topic block at ${row}_${col}`);
             }
         } else {
             currentTopicArticle = null;
             currentTopicCell = null;
             displayGameWindow();
         }
-    
+
+        // Show join popup when both players are present
         if (gameData.players.player1 && gameData.players.player2 && gameData.status === 'waiting' && !gameStarted) {
             joinPopup = showPopup('Two players have joined!', `
                 <button id="begin-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Start Game</button>
@@ -201,12 +263,14 @@ function listenForGameUpdates() {
                 });
             });
         }
-    
+
+        // Remove join popup when game starts
         if (gameData.status === 'active' && joinPopup) {
             joinPopup.remove();
             joinPopup = null;
         }
-    
+
+        // Handle game end
         if (gameData.status === 'finished') {
             const winner = gameData.scores.player1 > gameData.scores.player2 ? 'Player 1' : 
                           gameData.scores.player2 > gameData.scores.player1 ? 'Player 2' : 'Tie';
@@ -220,7 +284,6 @@ function listenForGameUpdates() {
         console.error('Error listening for game updates:', error);
         showPopup('Error loading game updates. Please try again.');
     });
-    
 }
 
 
