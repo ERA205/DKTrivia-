@@ -538,6 +538,11 @@ function displayGameWindow(articleData = null) {
     gameWindow.style.paddingBottom = '10px';
     gameWindow.style.boxSizing = 'border-box';
 
+    // Preserve the "Start Game" button
+    const startButton = gameWindow.querySelector('#start-game-button');
+    const buttonHtml = startButton ? startButton.outerHTML : '';
+
+    // Clear existing content except the button placeholder
     gameWindow.innerHTML = '';
 
     if (!articleData) {
@@ -549,7 +554,6 @@ function displayGameWindow(articleData = null) {
         placeholder.style.margin = '0 auto';
         gameWindow.appendChild(placeholder);
     } else {
-        // Display article photo
         if (articleData.imageUrl) {
             const img = document.createElement('img');
             img.src = articleData.imageUrl;
@@ -569,7 +573,6 @@ function displayGameWindow(articleData = null) {
             gameWindow.appendChild(placeholder);
         }
 
-        // Display article title
         const titleText = document.createElement('p');
         titleText.style.textAlign = 'center';
         titleText.style.margin = '10px 0 0 0';
@@ -579,7 +582,6 @@ function displayGameWindow(articleData = null) {
         titleText.textContent = articleData.title;
         gameWindow.appendChild(titleText);
 
-        // Display monthly views
         const viewsText = document.createElement('p');
         viewsText.style.textAlign = 'center';
         viewsText.style.margin = '10px 0 0 0';
@@ -597,6 +599,22 @@ function displayGameWindow(articleData = null) {
         viewsText.appendChild(viewsLabelSpan);
         viewsText.appendChild(viewsSpan);
         gameWindow.appendChild(viewsText);
+    }
+
+    // Re-append the "Start Game" button if it exists
+    if (buttonHtml) {
+        gameWindow.innerHTML += buttonHtml;
+        // Re-attach event listener to the new button instance
+        const newButton = gameWindow.querySelector('#start-game-button');
+        if (newButton) {
+            newButton.addEventListener('click', () => {
+                if (!currentUser) {
+                    showPopup('Please wait, signing in...');
+                    return;
+                }
+                startNewGame();
+            });
+        }
     }
 }
 
@@ -807,6 +825,10 @@ auth.onAuthStateChanged((user) => {
             console.error('Error signing in anonymously:', error);
             showPopup('Error signing in. Please try again.');
         });
+        // Ensure the "Start Game" button is visible on page load if game hasn't started
+    if (!gameId) {
+        startGameButton.style.display = 'block';
+    }
     }
 });
 
