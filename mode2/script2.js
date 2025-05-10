@@ -709,17 +709,32 @@ input.addEventListener('keydown', async (e) => {
         gameRef.once('value').then(async (snapshot) => {
             const gameData = snapshot.val() || { scores: { player1: 0, player2: 0 }, grid: Array(5).fill().map(() => Array(5).fill(null)) };
 
+            // Ensure scores is valid
+            const scores = gameData.scores || { player1: 0, player2: 0 };
+            
             // Update scores
-            const newScores = { ...gameData.scores };
+            const newScores = { ...scores };
             newScores[playerNumber] = (newScores[playerNumber] || 0) + 1;
 
             // Switch turns
             const nextTurn = playerNumber === 'player1' ? 'player2' : 'player1';
 
+            // Ensure grid is a valid 5x5 array
+            let currentGrid = gameData.grid;
+            if (!currentGrid || !Array.isArray(currentGrid) || currentGrid.length !== 5) {
+                console.error('Invalid grid data:', currentGrid);
+                currentGrid = Array(5).fill().map(() => Array(5).fill(null));
+            }
+
             // Check if the grid is full
             let filledCellsCount = 0;
-            const currentGrid = gameData.grid;
             for (let r = 0; r < 5; r++) {
+                // Ensure grid[r] is a valid array
+                if (!Array.isArray(currentGrid[r]) || currentGrid[r].length !== 5) {
+                    console.error(`Invalid grid row ${r}:`, currentGrid[r]);
+                    currentGrid[r] = Array(5).fill(null);
+                }
+
                 for (let c = 0; c < 5; c++) {
                     if (currentGrid[r][c]) filledCellsCount++;
                 }

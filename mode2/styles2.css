@@ -183,3 +183,7 @@ body {
     border: 1px solid #6273B4;
     border-radius: 5px;
 }
+
+#game-window-container {
+    position: relative;
+}
