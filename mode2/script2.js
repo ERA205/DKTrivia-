@@ -84,7 +84,7 @@ function startNewGame() {
     gameId = generateGameId();
     playerNumber = 'player1';
     const gameData = {
-        grid: Array(5).fill().map(() => Array(5).fill(null)), // 5x5 grid with null values
+        grid: {}, // Store grid as a flat object with keys like "row_col"
         currentTurn: null,
         players: {
             player1: currentUser.uid,
@@ -96,7 +96,7 @@ function startNewGame() {
             player1: 0,
             player2: 0
         },
-        round: 0 // Add round tracking for gameplay logic
+        round: 0
     };
     gameRef = database.ref(`territory_games/${gameId}`);
     gameRef.set(gameData).then(() => {
@@ -158,7 +158,7 @@ function listenForGameUpdates() {
         updateScores(gameData.scores);
     
         // Attempt to update the grid
-        const grid = gameData.grid || Array(5).fill().map(() => Array(5).fill(null));
+        const grid = gameData.grid || {};
         try {
             updateGrid(grid);
         } catch (error) {
@@ -219,60 +219,11 @@ function listenForGameUpdates() {
     }, (error) => {
         console.error('Error listening for game updates:', error);
         showPopup('Error loading game updates. Please try again.');
-    }); 
+    });
     
 }
 
-function updateGrid(grid) {
-    // Clear existing grid visuals
-    const cells = gridContainer.querySelectorAll('.grid-cell');
-    cells.forEach(cell => {
-        cell.classList.remove('filled', 'player1', 'player2');
-        while (cell.firstChild) cell.removeChild(cell.firstChild);
-    });
-    filledCells.clear();
-    lineGroup.innerHTML = ''; // Clear connection lines
 
-    // Ensure grid is a valid 5x5 array
-    let validatedGrid = Array(5).fill().map(() => Array(5).fill(null));
-    if (grid && Array.isArray(grid) && grid.length === 5) {
-        for (let row = 0; row < 5; row++) {
-            if (Array.isArray(grid[row]) && grid[row].length === 5) {
-                validatedGrid[row] = grid[row].slice();
-            }
-        }
-    }
-
-    // Rebuild grid based on validated data
-    for (let row = 0; row < 5; row++) {
-        for (let col = 0; col < 5; col++) {
-            const cell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
-            const cellData = validatedGrid[row][col];
-            if (cellData) {
-                cell.classList.add('filled', cellData.player);
-                if (!filledCells.has(cell)) {
-                    const node = document.createElement('div');
-                    node.classList.add('connection-node');
-                    cell.appendChild(node);
-                    filledCells.set(cell, {
-                        article: cellData.article,
-                        imageUrl: cellData.imageUrl,
-                        views: cellData.views,
-                        player: cellData.player,
-                        node: node
-                    });
-
-                    // Draw lines if this cell connects to another block
-                    if (cellData.connectionTo) {
-                        const [fromRow, fromCol] = cellData.connectionTo;
-                        const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
-                        if (fromCell) drawConnectionLine(fromCell, cell);
-                    }
-                }
-            }
-        }
-    }
-}
 
 // Function to update the turn indicator
 function updateTurnIndicator(currentTurn, players) {
@@ -714,30 +665,22 @@ input.addEventListener('keydown', async (e) => {
         }
 
         // Read the current game state
+        // Read the current game state
 gameRef.once('value').then(async (snapshot) => {
     const gameData = snapshot.val() || { 
         scores: { player1: 0, player2: 0 }, 
-        grid: Array(5).fill().map(() => Array(5).fill(null)),
+        grid: {},
         round: 0
     };
 
-    // Ensure grid is a valid 5x5 array
-    let currentGrid = gameData.grid;
-    if (!currentGrid || !Array.isArray(currentGrid) || currentGrid.length !== 5) {
-        console.error('Invalid grid data:', currentGrid);
-        currentGrid = Array(5).fill().map(() => Array(5).fill(null));
-    }
-    for (let r = 0; r < 5; r++) {
-        if (!Array.isArray(currentGrid[r]) || currentGrid[r].length !== 5) {
-            console.error(`Invalid grid row ${r}:`, currentGrid[r]);
-            currentGrid[r] = Array(5).fill(null);
-        }
-    }
+    // Get the current grid as a flat object
+    const currentGrid = gameData.grid || {};
 
-    // Update the specific cell in the grid
+    // Update the specific cell in the grid using "row_col" key
     const row = parseInt(selectedCell.dataset.row);
     const col = parseInt(selectedCell.dataset.col);
-    currentGrid[row][col] = {
+    const cellKey = `${row}_${col}`;
+    currentGrid[cellKey] = {
         article: articleTitle,
         imageUrl: await fetchMainImage(articleTitle),
         views: await fetchAverageMonthlyViews(articleTitle),
@@ -747,7 +690,7 @@ gameRef.once('value').then(async (snapshot) => {
 
     // Prepare updates
     const updates = {
-        grid: currentGrid, // Update the entire grid array
+        grid: currentGrid, // Update the entire grid object
         currentTurn: playerNumber === 'player1' ? 'player2' : 'player1',
         scores: { ...gameData.scores, [playerNumber]: (gameData.scores[playerNumber] || 0) + 1 },
         topicBlock: {
@@ -759,12 +702,7 @@ gameRef.once('value').then(async (snapshot) => {
     };
 
     // Check if the grid is full
-    let filledCellsCount = 0;
-    for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 5; c++) {
-            if (currentGrid[r][c]) filledCellsCount++;
-        }
-    }
+    let filledCellsCount = Object.keys(currentGrid).length;
     if (filledCellsCount >= 25) {
         updates.status = 'finished';
     }
