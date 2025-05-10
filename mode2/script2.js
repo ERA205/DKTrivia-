@@ -95,7 +95,8 @@ function startNewGame() {
         scores: {
             player1: 0,
             player2: 0
-        }
+        },
+        round: 0 // Add round tracking for gameplay logic
     };
     gameRef = database.ref(`territory_games/${gameId}`);
     gameRef.set(gameData).then(() => {
@@ -148,15 +149,21 @@ function joinGame(gameId) {
 // Function to listen for game updates
 function listenForGameUpdates() {
     let joinPopup = null; // Track the "Two players have joined!" popup
-
     gameRef.on('value', (snapshot) => {
         const gameData = snapshot.val();
         if (!gameData) return;
     
-        const grid = gameData.grid || Array(5).fill().map(() => Array(5).fill(null));
-        updateGrid(grid);
+        // Ensure turn indicator updates even if grid update fails
         updateTurnIndicator(gameData.currentTurn, gameData.players);
         updateScores(gameData.scores);
+    
+        // Attempt to update the grid
+        const grid = gameData.grid || Array(5).fill().map(() => Array(5).fill(null));
+        try {
+            updateGrid(grid);
+        } catch (error) {
+            console.error('Error updating grid:', error);
+        }
     
         if (gameData.topicBlock) {
             const { row, col, article } = gameData.topicBlock;
@@ -212,7 +219,8 @@ function listenForGameUpdates() {
     }, (error) => {
         console.error('Error listening for game updates:', error);
         showPopup('Error loading game updates. Please try again.');
-    });
+    }); 
+    
 }
 
 function updateGrid(grid) {
@@ -225,22 +233,41 @@ function updateGrid(grid) {
     filledCells.clear();
     lineGroup.innerHTML = ''; // Clear connection lines
 
-    // Rebuild grid based on Firebase data
+    // Ensure grid is a valid 5x5 array
+    let validatedGrid = Array(5).fill().map(() => Array(5).fill(null));
+    if (grid && Array.isArray(grid) && grid.length === 5) {
+        for (let row = 0; row < 5; row++) {
+            if (Array.isArray(grid[row]) && grid[row].length === 5) {
+                validatedGrid[row] = grid[row].slice();
+            }
+        }
+    }
+
+    // Rebuild grid based on validated data
     for (let row = 0; row < 5; row++) {
         for (let col = 0; col < 5; col++) {
             const cell = gridContainer.querySelector(`.grid-cell[data-row="${row}"][data-col="${col}"]`);
-            const cellData = grid[row][col];
+            const cellData = validatedGrid[row][col];
             if (cellData) {
                 cell.classList.add('filled', cellData.player);
-                const node = document.createElement('div');
-                node.classList.add('connection-node');
-                cell.appendChild(node);
-                filledCells.set(cell, { ...cellData, node });
+                if (!filledCells.has(cell)) {
+                    const node = document.createElement('div');
+                    node.classList.add('connection-node');
+                    cell.appendChild(node);
+                    filledCells.set(cell, {
+                        article: cellData.article,
+                        imageUrl: cellData.imageUrl,
+                        views: cellData.views,
+                        player: cellData.player,
+                        node: node
+                    });
 
-                if (cellData.connectionTo) {
-                    const [fromRow, fromCol] = cellData.connectionTo;
-                    const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
-                    if (fromCell) drawConnectionLine(fromCell, cell);
+                    // Draw lines if this cell connects to another block
+                    if (cellData.connectionTo) {
+                        const [fromRow, fromCol] = cellData.connectionTo;
+                        const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
+                        if (fromCell) drawConnectionLine(fromCell, cell);
+                    }
                 }
             }
         }
@@ -690,7 +717,8 @@ input.addEventListener('keydown', async (e) => {
 gameRef.once('value').then(async (snapshot) => {
     const gameData = snapshot.val() || { 
         scores: { player1: 0, player2: 0 }, 
-        grid: Array(5).fill().map(() => Array(5).fill(null)) 
+        grid: Array(5).fill().map(() => Array(5).fill(null)),
+        round: 0
     };
 
     // Ensure grid is a valid 5x5 array
@@ -698,6 +726,12 @@ gameRef.once('value').then(async (snapshot) => {
     if (!currentGrid || !Array.isArray(currentGrid) || currentGrid.length !== 5) {
         console.error('Invalid grid data:', currentGrid);
         currentGrid = Array(5).fill().map(() => Array(5).fill(null));
+    }
+    for (let r = 0; r < 5; r++) {
+        if (!Array.isArray(currentGrid[r]) || currentGrid[r].length !== 5) {
+            console.error(`Invalid grid row ${r}:`, currentGrid[r]);
+            currentGrid[r] = Array(5).fill(null);
+        }
     }
 
     // Update the specific cell in the grid
@@ -720,7 +754,8 @@ gameRef.once('value').then(async (snapshot) => {
             row: row,
             col: col,
             article: articleTitle
-        }
+        },
+        round: (gameData.round || 0) + 1
     };
 
     // Check if the grid is full
