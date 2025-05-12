@@ -543,33 +543,43 @@ function generateGrid() {
                 }
 
                 // If the cell is not filled, handle selection
-                if (!isFirstBlockFilled) {
-                    // First block can be placed anywhere
-                    if (selectedCell) {
-                        selectedCell.classList.remove('selected');
-                    }
-                    cell.classList.add('selected');
-                    selectedCell = cell;
-                    console.log(`Cell at row ${row}, col ${col} selected (first block)`);
-                } else {
-                    // After the first block, must be adjacent to the topic block
-                    if (!currentTopicCell) {
-                        console.log('No topic block selected; cannot select cell');
-                        return;
-                    }
-                    const topicRow = parseInt(currentTopicCell.dataset.row);
-                    const topicCol = parseInt(currentTopicCell.dataset.col);
-                    if (isAdjacentToCell(row, col, topicRow, topicCol)) {
+                gameRef.once('value').then(snapshot => {
+                    const gameData = snapshot.val();
+                    const round = gameData?.round || 0;
+                    const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
+                    const playerPoints = scores[playerNumber]?.points || 0;
+                    const canPlaceAnywhere = playerPoints >= 5 && confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
+
+                    if (round === 0 || canPlaceAnywhere) {
+                        // First block or placing anywhere, can be placed anywhere
                         if (selectedCell) {
                             selectedCell.classList.remove('selected');
                         }
                         cell.classList.add('selected');
                         selectedCell = cell;
-                        console.log(`Cell at row ${row}, col ${col} selected, adjacent to topic block at row ${topicRow}, col ${topicCol}`);
+                        console.log(`Cell at row ${row}, col ${col} selected (first block or placing anywhere)`);
                     } else {
-                        console.log(`Cell at row ${row}, col ${col} not adjacent to topic block at row ${topicRow}, col ${topicCol}, cannot select`);
+                        // After the first block, must be adjacent to the topic block
+                        if (!currentTopicCell) {
+                            console.log('No topic block selected; cannot select cell');
+                            return;
+                        }
+                        const topicRow = parseInt(currentTopicCell.dataset.row);
+                        const topicCol = parseInt(currentTopicCell.dataset.col);
+                        if (isAdjacentToCell(row, col, topicRow, topicCol)) {
+                            if (selectedCell) {
+                                selectedCell.classList.remove('selected');
+                            }
+                            cell.classList.add('selected');
+                            selectedCell = cell;
+                            console.log(`Cell at row ${row}, col ${col} selected, adjacent to topic block at row ${topicRow}, col ${topicCol}`);
+                        } else {
+                            console.log(`Cell at row ${row}, col ${col} not adjacent to topic block at row ${topicRow}, col ${topicCol}, cannot select`);
+                        }
                     }
-                }
+                }).catch(error => {
+                    console.error('Error fetching game state in generateGrid:', error);
+                });
             });
             gridContainer.appendChild(cell);
         }
@@ -772,7 +782,7 @@ gameRef.once('value').then(async (snapshot) => {
         round: 0
     };
 
-    // Get the current grid as a flat object
+    // Get the current game state
     const currentGrid = gameData.grid || {};
     const round = gameData.round || 0;
     const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
@@ -788,10 +798,10 @@ gameRef.once('value').then(async (snapshot) => {
         }
     }
 
-    // If not the first block, check if the selected cell is adjacent to the topic block unless placing anywhere
+    // If not the first round (round > 1), require a topic block unless placing anywhere
     const row = parseInt(selectedCell.dataset.row);
     const col = parseInt(selectedCell.dataset.col);
-    if (!canPlaceAnywhere && isFirstBlockFilled) {
+    if (!canPlaceAnywhere && round > 0) { // Round 0 and 1 are for the first blocks by each player
         if (!currentTopicCell) {
             showPopup('No topic block selected. Click a filled block to set the topic.');
             input.value = '';
@@ -816,8 +826,7 @@ gameRef.once('value').then(async (snapshot) => {
             return;
         }
     } else {
-        // First block, no connection check needed
-        isFirstBlockFilled = true;
+        // First block or placing anywhere, no connection check needed
         baseRatio = 1; // First block has a ratio of 1
         console.log(`First block ratio set to 1 for ${articleTitle}`);
     }
@@ -829,7 +838,7 @@ gameRef.once('value').then(async (snapshot) => {
         imageUrl: await fetchMainImage(articleTitle),
         views: await fetchAverageMonthlyViews(articleTitle),
         player: playerNumber,
-        connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
+        connectionTo: currentTopicCell && !canPlaceAnywhere ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
     };
 
     // Update cells count
