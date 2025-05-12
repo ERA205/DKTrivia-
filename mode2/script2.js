@@ -769,7 +769,7 @@ input.addEventListener('keydown', async (e) => {
             baseRatio = 1; // First block has a ratio of 1
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
-// Read the current game state
+        // Read the current game state
 gameRef.once('value').then(async (snapshot) => {
     const gameData = snapshot.val() || { 
         scores: { 
@@ -777,7 +777,8 @@ gameRef.once('value').then(async (snapshot) => {
             player2: { cells: 0, points: 0 }
         }, 
         grid: {},
-        round: 0
+        round: 0,
+        ratios: { player1: [], player2: [] }
     };
 
     // Get the current game state
