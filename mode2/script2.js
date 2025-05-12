@@ -723,242 +723,208 @@ input.addEventListener('keydown', async (e) => {
             return;
         }
 
-        // If not the first block, check if the selected cell is adjacent to the topic block
-        let baseRatio = 0;
-        const row = parseInt(selectedCell.dataset.row);
-        const col = parseInt(selectedCell.dataset.col);
-        if (isFirstBlockFilled) {
-            if (!currentTopicCell) {
-                showPopup('No topic block selected. Click a filled block to set the topic.');
-                input.value = '';
-                return;
-            }
-
-            const topicRow = parseInt(currentTopicCell.dataset.row);
-            const topicCol = parseInt(currentTopicCell.dataset.col);
-
-            // Check if the selected cell is adjacent to the topic block
-            if (!isAdjacentToCell(row, col, topicRow, topicCol)) {
-                showPopup('Selected cell must be adjacent to the topic block.');
-                input.value = '';
-                return;
-            }
-
-            // Check if the new article connects to the current topic article
-            const hasLink = await checkWikitextForLink(articleTitle, currentTopicArticle);
-            if (!hasLink) {
-                showPopup('Input does not match. Try again.');
-                input.value = '';
-                return;
-            }
-
-            // Calculate ratio (views of new article / views of topic article)
-            const newViewsData = await fetchAverageMonthlyViews(articleTitle);
-            const topicCell = Array.from(filledCells.entries()).find(([_, data]) => data.article === currentTopicArticle);
-            const topicViews = topicCell ? topicCell[1].views.raw : 0;
-            if (newViewsData.raw !== 0 && topicViews !== 0) {
-                baseRatio = newViewsData.raw / topicViews;
-                console.log(`Base Ratio for ${articleTitle}/${currentTopicArticle}: ${baseRatio}`);
-            } else {
-                baseRatio = 0;
-                console.log(`No valid views data for ${articleTitle} or ${currentTopicArticle}, ratio set to 0`);
-            }
-        } else {
-            
-            const viewsData = await fetchAverageMonthlyViews(articleTitle);
-            baseRatio = 1; // First block has a ratio of 1
-            console.log(`First block ratio set to 1 for ${articleTitle}`);
-        }
         // Read the current game state
-gameRef.once('value').then(async (snapshot) => {
-    const gameData = snapshot.val() || { 
-        scores: { 
-            player1: { cells: 0, points: 0 }, 
-            player2: { cells: 0, points: 0 }
-        }, 
-        grid: {},
-        round: 0,
-        ratios: { player1: [], player2: [] }
-    };
+        gameRef.once('value').then(async (snapshot) => {
+            const gameData = snapshot.val() || { 
+                scores: { 
+                    player1: { cells: 0, points: 0 }, 
+                    player2: { cells: 0, points: 0 }
+                }, 
+                grid: {},
+                round: 0,
+                ratios: { player1: [], player2: [] }
+            };
 
-    // Get the current game state
-    const currentGrid = gameData.grid || {};
-    const round = gameData.round || 0;
-    const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
+            // Get the current game state
+            const currentGrid = gameData.grid || {};
+            const round = gameData.round || 0;
+            const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
 
-    // Check if the player has 5 points to place a block anywhere
-    const playerPoints = scores[playerNumber].points || 0;
-    let canPlaceAnywhere = false;
-    if (playerPoints >= 5) {
-        const usePoints = confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
-        if (usePoints) {
-            canPlaceAnywhere = true;
-            scores[playerNumber].points -= 5;
-        }
-    }
-
-    // If not the first two rounds (round > 1), require a topic block unless placing anywhere
-    const row = parseInt(selectedCell.dataset.row);
-    const col = parseInt(selectedCell.dataset.col);
-    if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
-        if (!currentTopicCell) {
-            showPopup('No topic block selected. Click a filled block to set the topic.');
-            input.value = '';
-            return;
-        }
-
-        const topicRow = parseInt(currentTopicCell.dataset.row);
-        const topicCol = parseInt(currentTopicCell.dataset.col);
-
-        // Check if the selected cell is adjacent to the topic block
-        if (!isAdjacentToCell(row, col, topicRow, topicCol)) {
-            showPopup('Selected cell must be adjacent to the topic block.');
-            input.value = '';
-            return;
-        }
-
-        // Check if the new article connects to the current topic article
-        const hasLink = await checkWikitextForLink(articleTitle, currentTopicArticle);
-        if (!hasLink) {
-            showPopup('Input does not match. Try again.');
-            input.value = '';
-            return;
-        }
-    } else {
-        // First block for each player (round 0 or 1) or placing anywhere, no connection check needed
-        baseRatio = 1; // First block has a ratio of 1
-        console.log(`First block ratio set to 1 for ${articleTitle}`);
-    }
-
-    // Update the specific cell in the grid using "row_col" key
-    const cellKey = `${row}_${col}`;
-    currentGrid[cellKey] = {
-        article: articleTitle,
-        imageUrl: await fetchMainImage(articleTitle),
-        views: await fetchAverageMonthlyViews(articleTitle),
-        player: playerNumber,
-        connectionTo: currentTopicCell && !canPlaceAnywhere && round > 1 ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
-    };
-
-    // Update cells count
-    scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
-
-    // Award points for lowest ratio at the end of each round (after both players have placed a block)
-    let updates = {
-        grid: currentGrid,
-        currentTurn: playerNumber === 'player1' ? 'player2' : 'player1',
-        scores: scores,
-        topicBlock: {
-            row: row,
-            col: col,
-            article: articleTitle
-        },
-        round: round + 1
-    };
-
-    // Initialize ratios if not present
-    let ratios = gameData.ratios || { player1: [], player2: [] };
-    if (!ratios.player1) ratios.player1 = [];
-    if (!ratios.player2) ratios.player2 = [];
-
-    if (round % 2 === 1 && round > 0) { // End of a round (both players have placed a block)
-        ratios[playerNumber].push(baseRatio);
-        updates.ratios = ratios;
-
-        // Compare the last two ratios (one from each player)
-        const p1Ratio = ratios.player1[ratios.player1.length - 1];
-        const p2Ratio = ratios.player2[ratios.player2.length - 1];
-        if (p1Ratio < p2Ratio) {
-            scores.player1.points = (scores.player1.points || 0) + 1;
-            showPopup('Player 1 wins this round with a lower ratio!');
-        } else if (p2Ratio < p1Ratio) {
-            scores.player2.points = (scores.player2.points || 0) + 1;
-            showPopup('Player 2 wins this round with a lower ratio!');
-        } else {
-            showPopup('Tie round - no points awarded.');
-        }
-        updates.scores = scores;
-    } else {
-        // Store the ratio for this move
-        ratios[playerNumber].push(baseRatio);
-        updates.ratios = ratios;
-    }
-
-    // Check for surrounded blocks
-    for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 5; c++) {
-            const key = `${r}_${c}`;
-            const cell = currentGrid[key];
-            if (cell && cell.player !== playerNumber) {
-                // Check if the cell is surrounded by the current player's blocks
-                const surrounded = [
-                    { dr: -1, dc: 0 }, // Up
-                    { dr: 1, dc: 0 },  // Down
-                    { dr: 0, dc: -1 }, // Left
-                    { dr: 0, dc: 1 }   // Right
-                ].every(({ dr, dc }) => {
-                    const nr = r + dr;
-                    const nc = c + dc;
-                    if (nr < 0 || nr >= 5 || nc < 0 || nc >= 5) return true; // Out of bounds counts as surrounded
-                    const neighborKey = `${nr}_${nc}`;
-                    const neighbor = currentGrid[neighborKey];
-                    return neighbor && neighbor.player === playerNumber;
-                });
-
-                if (surrounded) {
-                    console.log(`Cell at ${r}_${c} surrounded by ${playerNumber}, changing ownership`);
-                    currentGrid[key].player = playerNumber;
-                    scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
-                    scores[cell.player].cells = (scores[cell.player].cells || 0) - 1;
-                    updates.grid = currentGrid;
-                    updates.scores = scores;
+            // Check if the player has 5 points to place a block anywhere
+            const playerPoints = scores[playerNumber].points || 0;
+            let canPlaceAnywhere = false;
+            if (playerPoints >= 5) {
+                const usePoints = confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
+                if (usePoints) {
+                    canPlaceAnywhere = true;
+                    scores[playerNumber].points -= 5;
                 }
             }
-        }
-    }
 
-    // Check if the grid is full
-    let filledCellsCount = Object.keys(currentGrid).length;
-    if (filledCellsCount >= 25) {
-        updates.status = 'finished';
-    }
+            // If not the first two rounds (round > 1), require a topic block unless placing anywhere
+            const row = parseInt(selectedCell.dataset.row);
+            const col = parseInt(selectedCell.dataset.col);
+            if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
+                if (!currentTopicCell) {
+                    showPopup('No topic block selected. Click a filled block to set the topic.');
+                    input.value = '';
+                    return;
+                }
 
-    // Update Firebase
-    return gameRef.update(updates);
-}).then(async () => {
-    // Local updates
-    gameCsvData.push({
-        article: articleTitle,
-        ratio: baseRatio,
-        pointsEarned: 0,
-        views: (await fetchAverageMonthlyViews(articleTitle)).formatted
-    });
-    console.log('Updated CSV:', generateCsvContent());
+                const topicRow = parseInt(currentTopicCell.dataset.row);
+                const topicCol = parseInt(currentTopicCell.dataset.col);
 
-    selectedCell.classList.remove('selected');
-    selectedCell.classList.add('filled', playerNumber);
-    const node = document.createElement('div');
-    node.classList.add('connection-node');
-    selectedCell.appendChild(node);
-    filledCells.set(selectedCell, {
-        article: articleTitle,
-        imageUrl: await fetchMainImage(articleTitle),
-        views: await fetchAverageMonthlyViews(articleTitle),
-        player: playerNumber,
-        node: node
-    });
+                // Check if the selected cell is adjacent to the topic block
+                if (!isAdjacentToCell(row, col, topicRow, topicCol)) {
+                    showPopup('Selected cell must be adjacent to the topic block.');
+                    input.value = '';
+                    return;
+                }
 
-    if (currentTopicCell) {
-        drawConnectionLine(currentTopicCell, selectedCell);
-    }
+                // Check if the new article connects to the current topic article
+                const hasLink = await checkWikitextForLink(articleTitle, currentTopicArticle);
+                if (!hasLink) {
+                    showPopup('Input does not match. Try again.');
+                    input.value = '';
+                    return;
+                }
 
-    console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
-    selectedCell = null;
-    input.value = '';
-}).catch((error) => {
-    console.error('Error updating game state:', error);
-    showPopup('Error updating game state. Please try again.');
-});
+                // Calculate ratio (views of new article / views of topic article)
+                const newViewsData = await fetchAverageMonthlyViews(articleTitle);
+                const topicCell = Array.from(filledCells.entries()).find(([_, data]) => data.article === currentTopicArticle);
+                const topicViews = topicCell ? topicCell[1].views.raw : 0;
+                if (newViewsData.raw !== 0 && topicViews !== 0) {
+                    baseRatio = newViewsData.raw / topicViews;
+                    console.log(`Base Ratio for ${articleTitle}/${currentTopicArticle}: ${baseRatio}`);
+                } else {
+                    baseRatio = 0;
+                    console.log(`No valid views data for ${articleTitle} or ${currentTopicArticle}, ratio set to 0`);
+                }
+            } else {
+                // First block for each player (round 0 or 1) or placing anywhere, no connection check needed
+                baseRatio = 1; // First block has a ratio of 1
+                console.log(`First block ratio set to 1 for ${articleTitle}`);
+            }
+
+            // Update the specific cell in the grid using "row_col" key
+            const cellKey = `${row}_${col}`;
+            currentGrid[cellKey] = {
+                article: articleTitle,
+                imageUrl: await fetchMainImage(articleTitle),
+                views: await fetchAverageMonthlyViews(articleTitle),
+                player: playerNumber,
+                connectionTo: currentTopicCell && !canPlaceAnywhere && round > 1 ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
+            };
+
+            // Update cells count
+            scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
+
+            // Award points for lowest ratio at the end of each round (after both players have placed a block)
+            let updates = {
+                grid: currentGrid,
+                currentTurn: playerNumber === 'player1' ? 'player2' : 'player1',
+                scores: scores,
+                topicBlock: {
+                    row: row,
+                    col: col,
+                    article: articleTitle
+                },
+                round: round + 1
+            };
+
+            // Initialize ratios if not present
+            let ratios = gameData.ratios || { player1: [], player2: [] };
+            if (!ratios.player1) ratios.player1 = [];
+            if (!ratios.player2) ratios.player2 = [];
+
+            if (round % 2 === 1 && round > 0) { // End of a round (both players have placed a block)
+                ratios[playerNumber].push(baseRatio);
+                updates.ratios = ratios;
+
+                // Compare the last two ratios (one from each player)
+                const p1Ratio = ratios.player1[ratios.player1.length - 1];
+                const p2Ratio = ratios.player2[ratios.player2.length - 1];
+                if (p1Ratio < p2Ratio) {
+                    scores.player1.points = (scores.player1.points || 0) + 1;
+                    showPopup('Player 1 wins this round with a lower ratio!');
+                } else if (p2Ratio < p1Ratio) {
+                    scores.player2.points = (scores.player2.points || 0) + 1;
+                    showPopup('Player 2 wins this round with a lower ratio!');
+                } else {
+                    showPopup('Tie round - no points awarded.');
+                }
+                updates.scores = scores;
+            } else {
+                // Store the ratio for this move
+                ratios[playerNumber].push(baseRatio);
+                updates.ratios = ratios;
+            }
+
+            // Check for surrounded blocks
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const key = `${r}_${c}`;
+                    const cell = currentGrid[key];
+                    if (cell && cell.player !== playerNumber) {
+                        // Check if the cell is surrounded by the current player's blocks
+                        const surrounded = [
+                            { dr: -1, dc: 0 }, // Up
+                            { dr: 1, dc: 0 },  // Down
+                            { dr: 0, dc: -1 }, // Left
+                            { dr: 0, dc: 1 }   // Right
+                        ].every(({ dr, dc }) => {
+                            const nr = r + dr;
+                            const nc = c + dc;
+                            if (nr < 0 || nr >= 5 || nc < 0 || nc >= 5) return true; // Out of bounds counts as surrounded
+                            const neighborKey = `${nr}_${nc}`;
+                            const neighbor = currentGrid[neighborKey];
+                            return neighbor && neighbor.player === playerNumber;
+                        });
+
+                        if (surrounded) {
+                            console.log(`Cell at ${r}_${c} surrounded by ${playerNumber}, changing ownership`);
+                            currentGrid[key].player = playerNumber;
+                            scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
+                            scores[cell.player].cells = (scores[cell.player].cells || 0) - 1;
+                            updates.grid = currentGrid;
+                            updates.scores = scores;
+                        }
+                    }
+                }
+            }
+
+            // Check if the grid is full
+            let filledCellsCount = Object.keys(currentGrid).length;
+            if (filledCellsCount >= 25) {
+                updates.status = 'finished';
+            }
+
+            // Update Firebase
+            return gameRef.update(updates);
+        }).then(async () => {
+            // Local updates
+            gameCsvData.push({
+                article: articleTitle,
+                ratio: baseRatio,
+                pointsEarned: 0,
+                views: (await fetchAverageMonthlyViews(articleTitle)).formatted
+            });
+            console.log('Updated CSV:', generateCsvContent());
+
+            selectedCell.classList.remove('selected');
+            selectedCell.classList.add('filled', playerNumber);
+            const node = document.createElement('div');
+            node.classList.add('connection-node');
+            selectedCell.appendChild(node);
+            filledCells.set(selectedCell, {
+                article: articleTitle,
+                imageUrl: await fetchMainImage(articleTitle),
+                views: await fetchAverageMonthlyViews(articleTitle),
+                player: playerNumber,
+                node: node
+            });
+
+            if (currentTopicCell) {
+                drawConnectionLine(currentTopicCell, selectedCell);
+            }
+
+            console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
+            selectedCell = null;
+            input.value = '';
+        }).catch((error) => {
+            console.error('Error updating game state:', error);
+            showPopup('Error updating game state. Please try again.');
+        });
     }
 });
 
