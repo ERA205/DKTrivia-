@@ -93,8 +93,8 @@ function startNewGame() {
         topicBlock: null,
         status: 'waiting',
         scores: {
-            player1: 0,
-            player2: 0
+            player1: { cells: 0, points: 0 },
+            player2: { cells: 0, points: 0 }
         },
         round: 0
     };
@@ -146,7 +146,7 @@ function joinGame(gameId) {
     });
 }
 
-function updateGrid(grid) {
+function updateGrid(grid, round) {
     console.log('Updating grid with data:', grid);
 
     // Clear existing grid visuals
@@ -182,8 +182,8 @@ function updateGrid(grid) {
                         node: node
                     });
 
-                    // Draw lines if this cell connects to another block
-                    if (cellData.connectionTo) {
+                    // Draw lines if this cell connects to another block, but skip for the first two blocks (round <= 2)
+                    if (cellData.connectionTo && round > 2) {
                         const [fromRow, fromCol] = cellData.connectionTo;
                         const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
                         if (fromCell) {
@@ -196,7 +196,6 @@ function updateGrid(grid) {
         }
     }
 }
-
 function listenForGameUpdates() {
     let joinPopup = null; // Track the "Two players have joined!" popup
 
@@ -215,9 +214,10 @@ function listenForGameUpdates() {
 
         // Attempt to update the grid
         const grid = gameData.grid || {};
+        const round = gameData.round || 0;
         try {
             console.log('Calling updateGrid with grid:', grid);
-            updateGrid(grid);
+            updateGrid(grid, round); // Pass round to updateGrid
         } catch (error) {
             console.error('Error updating grid:', error);
         }
@@ -264,10 +264,14 @@ function listenForGameUpdates() {
             });
         }
 
-        // Remove join popup when game starts
+        // Remove join popup and hide Start Game button when game starts
         if (gameData.status === 'active' && joinPopup) {
             joinPopup.remove();
             joinPopup = null;
+            const startButton = document.getElementById('start-game-button');
+            if (startButton) {
+                startButton.style.display = 'none';
+            }
         }
 
         // Handle game end
@@ -308,7 +312,9 @@ function updateTurnIndicator(currentTurn, players) {
 
 // Function to update the scores display
 function updateScores(scores) {
-    scoreDisplay.textContent = `Player 1: ${scores.player1} | Player 2: ${scores.player2}`;
+    const player1Cells = scores.player1?.cells || 0;
+    const player2Cells = scores.player2?.cells || 0;
+    scoreDisplay.textContent = `Player 1: ${player1Cells} cells | Player 2: ${player2Cells} cells`;
 }
 
 // Function to fetch Wikipedia article title
@@ -639,6 +645,34 @@ function displayGameWindow(articleData = null) {
         viewsText.appendChild(viewsLabelSpan);
         viewsText.appendChild(viewsSpan);
         gameWindow.appendChild(viewsText);
+
+        // Fetch scores to display points
+        gameRef.once('value').then(snapshot => {
+            const gameData = snapshot.val();
+            const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
+            
+            const pointsText = document.createElement('p');
+            pointsText.style.textAlign = 'center';
+            pointsText.style.margin = '10px 0 0 0';
+            pointsText.style.fontFamily = 'Arial, sans-serif';
+            pointsText.style.fontSize = '14px';
+
+            const p1PointsSpan = document.createElement('span');
+            p1PointsSpan.textContent = `Player 1 Points: ${scores.player1.points || 0}`;
+            p1PointsSpan.style.color = '#1E90FF'; // Dodger Blue for Player 1
+            pointsText.appendChild(p1PointsSpan);
+
+            pointsText.appendChild(document.createElement('br'));
+
+            const p2PointsSpan = document.createElement('span');
+            p2PointsSpan.textContent = `Player 2 Points: ${scores.player2.points || 0}`;
+            p2PointsSpan.style.color = '#FF4500'; // Orange Red for Player 2
+            pointsText.appendChild(p2PointsSpan);
+
+            gameWindow.appendChild(pointsText);
+        }).catch(error => {
+            console.error('Error fetching scores for points display:', error);
+        });
     }
 
     // Re-append the "Start Game" button if it exists
@@ -728,20 +762,67 @@ input.addEventListener('keydown', async (e) => {
         }
 
         // Read the current game state
-        // Read the current game state
 gameRef.once('value').then(async (snapshot) => {
     const gameData = snapshot.val() || { 
-        scores: { player1: 0, player2: 0 }, 
+        scores: { 
+            player1: { cells: 0, points: 0 }, 
+            player2: { cells: 0, points: 0 }
+        }, 
         grid: {},
         round: 0
     };
 
     // Get the current grid as a flat object
     const currentGrid = gameData.grid || {};
+    const round = gameData.round || 0;
+    const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
 
-    // Update the specific cell in the grid using "row_col" key
+    // Check if the player has 5 points to place a block anywhere
+    const playerPoints = scores[playerNumber].points || 0;
+    let canPlaceAnywhere = false;
+    if (playerPoints >= 5) {
+        const usePoints = confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
+        if (usePoints) {
+            canPlaceAnywhere = true;
+            scores[playerNumber].points -= 5;
+        }
+    }
+
+    // If not the first block, check if the selected cell is adjacent to the topic block unless placing anywhere
     const row = parseInt(selectedCell.dataset.row);
     const col = parseInt(selectedCell.dataset.col);
+    if (!canPlaceAnywhere && isFirstBlockFilled) {
+        if (!currentTopicCell) {
+            showPopup('No topic block selected. Click a filled block to set the topic.');
+            input.value = '';
+            return;
+        }
+
+        const topicRow = parseInt(currentTopicCell.dataset.row);
+        const topicCol = parseInt(currentTopicCell.dataset.col);
+
+        // Check if the selected cell is adjacent to the topic block
+        if (!isAdjacentToCell(row, col, topicRow, topicCol)) {
+            showPopup('Selected cell must be adjacent to the topic block.');
+            input.value = '';
+            return;
+        }
+
+        // Check if the new article connects to the current topic article
+        const hasLink = await checkWikitextForLink(articleTitle, currentTopicArticle);
+        if (!hasLink) {
+            showPopup('Input does not match. Try again.');
+            input.value = '';
+            return;
+        }
+    } else {
+        // First block, no connection check needed
+        isFirstBlockFilled = true;
+        baseRatio = 1; // First block has a ratio of 1
+        console.log(`First block ratio set to 1 for ${articleTitle}`);
+    }
+
+    // Update the specific cell in the grid using "row_col" key
     const cellKey = `${row}_${col}`;
     currentGrid[cellKey] = {
         article: articleTitle,
@@ -751,18 +832,79 @@ gameRef.once('value').then(async (snapshot) => {
         connectionTo: currentTopicCell ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
     };
 
-    // Prepare updates
-    const updates = {
-        grid: currentGrid, // Update the entire grid object
+    // Update cells count
+    scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
+
+    // Award points for lowest ratio at the end of each round (after both players have placed a block)
+    let updates = {
+        grid: currentGrid,
         currentTurn: playerNumber === 'player1' ? 'player2' : 'player1',
-        scores: { ...gameData.scores, [playerNumber]: (gameData.scores[playerNumber] || 0) + 1 },
+        scores: scores,
         topicBlock: {
             row: row,
             col: col,
             article: articleTitle
         },
-        round: (gameData.round || 0) + 1
+        round: round + 1
     };
+
+    if (round % 2 === 1 && round > 0) { // End of a round (both players have placed a block)
+        const ratios = gameData.ratios || { player1: [], player2: [] };
+        ratios[playerNumber].push(baseRatio);
+        updates.ratios = ratios;
+
+        // Compare the last two ratios (one from each player)
+        const p1Ratio = ratios.player1[ratios.player1.length - 1];
+        const p2Ratio = ratios.player2[ratios.player2.length - 1];
+        if (p1Ratio < p2Ratio) {
+            scores.player1.points = (scores.player1.points || 0) + 1;
+            showPopup('Player 1 wins this round with a lower ratio!');
+        } else if (p2Ratio < p1Ratio) {
+            scores.player2.points = (scores.player2.points || 0) + 1;
+            showPopup('Player 2 wins this round with a lower ratio!');
+        } else {
+            showPopup('Tie round - no points awarded.');
+        }
+        updates.scores = scores;
+    } else {
+        // Store the ratio for this move
+        const ratios = gameData.ratios || { player1: [], player2: [] };
+        ratios[playerNumber].push(baseRatio);
+        updates.ratios = ratios;
+    }
+
+    // Check for surrounded blocks
+    for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+            const key = `${r}_${c}`;
+            const cell = currentGrid[key];
+            if (cell && cell.player !== playerNumber) {
+                // Check if the cell is surrounded by the current player's blocks
+                const surrounded = [
+                    { dr: -1, dc: 0 }, // Up
+                    { dr: 1, dc: 0 },  // Down
+                    { dr: 0, dc: -1 }, // Left
+                    { dr: 0, dc: 1 }   // Right
+                ].every(({ dr, dc }) => {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr < 0 || nr >= 5 || nc < 0 || nc >= 5) return true; // Out of bounds counts as surrounded
+                    const neighborKey = `${nr}_${nc}`;
+                    const neighbor = currentGrid[neighborKey];
+                    return neighbor && neighbor.player === playerNumber;
+                });
+
+                if (surrounded) {
+                    console.log(`Cell at ${r}_${c} surrounded by ${playerNumber}, changing ownership`);
+                    currentGrid[key].player = playerNumber;
+                    scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
+                    scores[cell.player].cells = (scores[cell.player].cells || 0) - 1;
+                    updates.grid = currentGrid;
+                    updates.scores = scores;
+                }
+            }
+        }
+    }
 
     // Check if the grid is full
     let filledCellsCount = Object.keys(currentGrid).length;
@@ -806,6 +948,7 @@ gameRef.once('value').then(async (snapshot) => {
     console.error('Error updating game state:', error);
     showPopup('Error updating game state. Please try again.');
 });
+
     }
 });
 
