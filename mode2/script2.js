@@ -38,8 +38,7 @@ const filledCells = new Map(); // Maps cell (DOM element) to { article, ratio, v
 // Store CSV data
 let gameCsvData = [];
 
-// Track if the first block has been filled
-let isFirstBlockFilled = false;
+
 
 // Track the current topic block (the article displayed in the info window)
 let currentTopicArticle = null;
@@ -96,7 +95,8 @@ function startNewGame() {
             player1: { cells: 0, points: 0 },
             player2: { cells: 0, points: 0 }
         },
-        round: 0
+        round: 0,
+        ratios: { player1: [], player2: [] } // Initialize ratios
     };
     gameRef = database.ref(`territory_games/${gameId}`);
     gameRef.set(gameData).then(() => {
@@ -548,10 +548,10 @@ function generateGrid() {
                     const round = gameData?.round || 0;
                     const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
                     const playerPoints = scores[playerNumber]?.points || 0;
-                    const canPlaceAnywhere = playerPoints >= 5 && confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
+                    const canPlaceAnywhere = round <= 1 || (playerPoints >= 5 && confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`));
 
-                    if (round === 0 || canPlaceAnywhere) {
-                        // First block or placing anywhere, can be placed anywhere
+                    if (canPlaceAnywhere) {
+                        // First two blocks (round 0 or 1) or placing anywhere
                         if (selectedCell) {
                             selectedCell.classList.remove('selected');
                         }
@@ -559,7 +559,7 @@ function generateGrid() {
                         selectedCell = cell;
                         console.log(`Cell at row ${row}, col ${col} selected (first block or placing anywhere)`);
                     } else {
-                        // After the first block, must be adjacent to the topic block
+                        // After the first two blocks, must be adjacent to the topic block
                         if (!currentTopicCell) {
                             console.log('No topic block selected; cannot select cell');
                             return;
@@ -764,14 +764,12 @@ input.addEventListener('keydown', async (e) => {
                 console.log(`No valid views data for ${articleTitle} or ${currentTopicArticle}, ratio set to 0`);
             }
         } else {
-            // First block, no connection check needed
-            isFirstBlockFilled = true;
+            
             const viewsData = await fetchAverageMonthlyViews(articleTitle);
             baseRatio = 1; // First block has a ratio of 1
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
-
-        // Read the current game state
+// Read the current game state
 gameRef.once('value').then(async (snapshot) => {
     const gameData = snapshot.val() || { 
         scores: { 
@@ -798,10 +796,10 @@ gameRef.once('value').then(async (snapshot) => {
         }
     }
 
-    // If not the first round (round > 1), require a topic block unless placing anywhere
+    // If not the first two rounds (round > 1), require a topic block unless placing anywhere
     const row = parseInt(selectedCell.dataset.row);
     const col = parseInt(selectedCell.dataset.col);
-    if (!canPlaceAnywhere && round > 0) { // Round 0 and 1 are for the first blocks by each player
+    if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
         if (!currentTopicCell) {
             showPopup('No topic block selected. Click a filled block to set the topic.');
             input.value = '';
@@ -826,7 +824,7 @@ gameRef.once('value').then(async (snapshot) => {
             return;
         }
     } else {
-        // First block or placing anywhere, no connection check needed
+        // First block for each player (round 0 or 1) or placing anywhere, no connection check needed
         baseRatio = 1; // First block has a ratio of 1
         console.log(`First block ratio set to 1 for ${articleTitle}`);
     }
@@ -838,7 +836,7 @@ gameRef.once('value').then(async (snapshot) => {
         imageUrl: await fetchMainImage(articleTitle),
         views: await fetchAverageMonthlyViews(articleTitle),
         player: playerNumber,
-        connectionTo: currentTopicCell && !canPlaceAnywhere ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
+        connectionTo: currentTopicCell && !canPlaceAnywhere && round > 1 ? [parseInt(currentTopicCell.dataset.row), parseInt(currentTopicCell.dataset.col)] : null
     };
 
     // Update cells count
@@ -857,8 +855,12 @@ gameRef.once('value').then(async (snapshot) => {
         round: round + 1
     };
 
+    // Initialize ratios if not present
+    let ratios = gameData.ratios || { player1: [], player2: [] };
+    if (!ratios.player1) ratios.player1 = [];
+    if (!ratios.player2) ratios.player2 = [];
+
     if (round % 2 === 1 && round > 0) { // End of a round (both players have placed a block)
-        const ratios = gameData.ratios || { player1: [], player2: [] };
         ratios[playerNumber].push(baseRatio);
         updates.ratios = ratios;
 
@@ -877,7 +879,6 @@ gameRef.once('value').then(async (snapshot) => {
         updates.scores = scores;
     } else {
         // Store the ratio for this move
-        const ratios = gameData.ratios || { player1: [], player2: [] };
         ratios[playerNumber].push(baseRatio);
         updates.ratios = ratios;
     }
@@ -957,7 +958,6 @@ gameRef.once('value').then(async (snapshot) => {
     console.error('Error updating game state:', error);
     showPopup('Error updating game state. Please try again.');
 });
-
     }
 });
 
