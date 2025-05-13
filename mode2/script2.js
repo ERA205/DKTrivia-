@@ -182,20 +182,25 @@ function updateGrid(grid, round) {
                         node: node
                     });
 
-                    // Draw lines if this cell connects to another block, but skip for the first two blocks (round <= 2)
-                    if (cellData.connectionTo && round > 2) {
+                    // Draw lines if this cell connects to another block, but skip for the first two blocks (round <= 1)
+                    if (cellData.connectionTo && round > 1) {
                         const [fromRow, fromCol] = cellData.connectionTo;
                         const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
                         if (fromCell) {
                             console.log(`Drawing line from ${fromRow}_${fromCol} to ${row}_${col}`);
                             drawConnectionLine(fromCell, cell);
+                        } else {
+                            console.log(`Could not draw line: fromCell at ${fromRow}_${fromCol} not found`);
                         }
+                    } else if (round <= 1) {
+                        console.log(`Skipping line drawing for cell ${cellKey}: round ${round} <= 1`);
                     }
                 }
             }
         }
     }
 }
+
 function listenForGameUpdates() {
     let joinPopup = null; // Track the "Two players have joined!" popup
 
@@ -754,6 +759,7 @@ input.addEventListener('keydown', async (e) => {
             // If not the first two rounds (round > 1), require a topic block unless placing anywhere
             const row = parseInt(selectedCell.dataset.row);
             const col = parseInt(selectedCell.dataset.col);
+            let baseRatio = 0;
             if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
                 if (!currentTopicCell) {
                     showPopup('No topic block selected. Click a filled block to set the topic.');
@@ -850,7 +856,7 @@ input.addEventListener('keydown', async (e) => {
                 updates.ratios = ratios;
             }
 
-            // Check for surrounded blocks
+            // Check for completely surrounded blocks (existing logic)
             for (let r = 0; r < 5; r++) {
                 for (let c = 0; c < 5; c++) {
                     const key = `${r}_${c}`;
@@ -876,6 +882,62 @@ input.addEventListener('keydown', async (e) => {
                             currentGrid[key].player = playerNumber;
                             scores[playerNumber].cells = (scores[playerNumber].cells || 0) + 1;
                             scores[cell.player].cells = (scores[cell.player].cells || 0) - 1;
+                            updates.grid = currentGrid;
+                            updates.scores = scores;
+                        }
+                    }
+                }
+            }
+
+            // New capture feature: Capture a block if more than 50% of surrounding cells belong to the opposing player
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const key = `${r}_${c}`;
+                    const cell = currentGrid[key];
+                    if (cell) {
+                        const currentOwner = cell.player;
+                        const opposingPlayer = currentOwner === 'player1' ? 'player2' : 'player1';
+
+                        // Determine the maximum number of surrounding cells based on position
+                        const directions = [
+                            { dr: -1, dc: 0 }, // Up
+                            { dr: 1, dc: 0 },  // Down
+                            { dr: 0, dc: -1 }, // Left
+                            { dr: 0, dc: 1 }   // Right
+                        ];
+
+                        let maxSurrounding = 0;
+                        let opposingCount = 0;
+                        directions.forEach(({ dr, dc }) => {
+                            const nr = r + dr;
+                            const nc = c + dc;
+                            if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) { // Valid cell within grid
+                                maxSurrounding++;
+                                const neighborKey = `${nr}_${nc}`;
+                                const neighbor = currentGrid[neighborKey];
+                                if (neighbor && neighbor.player === opposingPlayer) {
+                                    opposingCount++;
+                                }
+                            }
+                        });
+
+                        // Determine the capture threshold (more than 50%)
+                        let captureThreshold;
+                        if (maxSurrounding === 4) { // Interior block
+                            captureThreshold = 3; // 3 out of 4
+                        } else if (maxSurrounding === 3) { // Edge block
+                            captureThreshold = 2; // 2 out of 3
+                        } else if (maxSurrounding === 2) { // Corner block
+                            captureThreshold = 2; // 2 out of 2
+                        } else {
+                            continue; // Skip if maxSurrounding is 0 or invalid
+                        }
+
+                        if (opposingCount >= captureThreshold) {
+                            console.log(`Cell at ${r}_${c} captured by ${opposingPlayer}: ${opposingCount}/${maxSurrounding} surrounding cells`);
+                            currentGrid[key].player = opposingPlayer;
+                            scores[opposingPlayer].cells = (scores[opposingPlayer].cells || 0) + 1;
+                            scores[currentOwner].cells = (scores[currentOwner].cells || 0) - 1;
                             updates.grid = currentGrid;
                             updates.scores = scores;
                         }
@@ -914,8 +976,11 @@ input.addEventListener('keydown', async (e) => {
                 node: node
             });
 
-            if (currentTopicCell) {
+            // Draw the line immediately if a topic block exists and round > 1
+            if (currentTopicCell && round > 1) {
                 drawConnectionLine(currentTopicCell, selectedCell);
+            } else {
+                console.log(`Skipping line drawing: round ${round} <= 1 or no topic block`);
             }
 
             console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
