@@ -527,7 +527,7 @@ function drawConnectionLine(fromCell, toCell) {
     line.setAttribute('x2', svgToX);
     line.setAttribute('y2', svgToY);
     line.setAttribute('stroke', '#333333'); // Dark grey
-    line.setAttribute('stroke-width', '2'); // Adjusted for smaller SVG units
+    line.setAttribute('stroke-width', '2'); // Adjusted for SVG units
     line.setAttribute('stroke-linecap', 'round'); // Optional: rounded ends
 
     // Append the line to the SVG group
