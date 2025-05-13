@@ -18,7 +18,6 @@ const analytics = firebase.analytics();
 
 // Game elements
 const svg = document.getElementById('main-svg');
-const lineSvg = document.getElementById('line-svg');
 const gridContainer = document.getElementById('grid-container');
 const input = document.getElementById('connection-input');
 const gameWindow = document.getElementById('game-window');
@@ -494,23 +493,46 @@ function getAbsolutePosition(element) {
 function drawConnectionLine(fromCell, toCell) {
     const fromNode = fromCell.querySelector('.connection-node');
     const toNode = toCell.querySelector('.connection-node');
-    if (!fromNode || !toNode) return;
+    if (!fromNode || !toNode) {
+        console.log('Cannot draw line: fromNode or toNode not found');
+        return;
+    }
 
+    // Get absolute positions (viewport coordinates)
     const fromPos = getAbsolutePosition(fromNode);
     const toPos = getAbsolutePosition(toNode);
 
+    // Get the SVG's bounding rectangle to map viewport coordinates to SVG coordinates
+    const svgRect = svg.getBoundingClientRect();
+    const svgWidth = svgRect.width;
+    const svgHeight = svgRect.height;
+    const viewBox = svg.viewBox.baseVal;
+    const viewBoxWidth = viewBox.width; // 10000
+    const viewBoxHeight = viewBox.height; // 10000
+
+    // Calculate scale factors
+    const scaleX = viewBoxWidth / svgWidth;
+    const scaleY = viewBoxHeight / svgHeight;
+
+    // Transform viewport coordinates to SVG coordinates
+    const svgFromX = (fromPos.x - svgRect.left) * scaleX;
+    const svgFromY = (fromPos.y - svgRect.top) * scaleY;
+    const svgToX = (toPos.x - svgRect.left) * scaleX;
+    const svgToY = (toPos.y - svgRect.top) * scaleY;
+
     // Create an SVG line element
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', fromPos.x);
-    line.setAttribute('y1', fromPos.y);
-    line.setAttribute('x2', toPos.x);
-    line.setAttribute('y2', toPos.y);
+    line.setAttribute('x1', svgFromX);
+    line.setAttribute('y1', svgFromY);
+    line.setAttribute('x2', svgToX);
+    line.setAttribute('y2', svgToY);
     line.setAttribute('stroke', '#333333'); // Dark grey
-    line.setAttribute('stroke-width', '5'); // 5px wide line
+    line.setAttribute('stroke-width', '5'); // 5px wide line in SVG units
     line.setAttribute('stroke-linecap', 'round'); // Optional: rounded ends
 
     // Append the line to the SVG group
     lineGroup.appendChild(line);
+    console.log(`Line drawn from (${svgFromX}, ${svgFromY}) to (${svgToX}, ${svgToY})`);
 }
 
 // Generate the 5x5 grid
@@ -728,6 +750,9 @@ input.addEventListener('keydown', async (e) => {
             return;
         }
 
+        // Declare baseRatio in the outer scope
+        let baseRatio = 0;
+
         // Read the current game state
         gameRef.once('value').then(async (snapshot) => {
             const gameData = snapshot.val() || { 
@@ -759,7 +784,6 @@ input.addEventListener('keydown', async (e) => {
             // If not the first two rounds (round > 1), require a topic block unless placing anywhere
             const row = parseInt(selectedCell.dataset.row);
             const col = parseInt(selectedCell.dataset.col);
-            let baseRatio = 0;
             if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
                 if (!currentTopicCell) {
                     showPopup('No topic block selected. Click a filled block to set the topic.');
