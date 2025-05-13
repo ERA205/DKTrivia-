@@ -60,16 +60,24 @@ body {
 #score-display {
     font-weight: bold;
 }
-
-#grid-container {
+#main-svg {
+    width: 510px; /* 5 cells x 100px + 5 gaps x 2px = 510px */
+    height: 510px;
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
+#grid-container {
+    position: absolute;
+    top: 0;
+    left: 0;
     display: grid;
     grid-template-columns: repeat(5, 100px);
     grid-template-rows: repeat(5, 100px);
-    gap: 5px;
+    gap: 2px; /* Reduced gap for better alignment */
     z-index: 10;
 }
 
@@ -80,8 +88,22 @@ body {
     border: 1px solid #6273B4;
     cursor: pointer;
     box-sizing: border-box;
-    position: relative; /* For positioning the connection node */
-    z-index: 10; /* Ensure cells are below lines */
+    position: relative;
+    z-index: 10;
+}
+
+#line-group {
+    z-index: 20; /* Ensure lines are above grid cells */
+}
+
+.connection-node {
+    width: 10px;
+    height: 10px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: transparent;
 }
 
 .grid-cell.filled.player1 {
@@ -187,3 +209,4 @@ body {
 #game-window-container {
     position: relative;
 }
+

@@ -498,7 +498,7 @@ function drawConnectionLine(fromCell, toCell) {
         return;
     }
 
-    // Get absolute positions (viewport coordinates)
+    // Get the absolute positions of the nodes in viewport space (pixels)
     const fromPos = getAbsolutePosition(fromNode);
     const toPos = getAbsolutePosition(toNode);
 
@@ -507,14 +507,14 @@ function drawConnectionLine(fromCell, toCell) {
     const svgWidth = svgRect.width;
     const svgHeight = svgRect.height;
     const viewBox = svg.viewBox.baseVal;
-    const viewBoxWidth = viewBox.width; // 10000
-    const viewBoxHeight = viewBox.height; // 10000
+    const viewBoxWidth = viewBox.width; // 510
+    const viewBoxHeight = viewBox.height; // 510
 
-    // Calculate scale factors
+    // Calculate scale factors to map viewport pixels to SVG units
     const scaleX = viewBoxWidth / svgWidth;
     const scaleY = viewBoxHeight / svgHeight;
 
-    // Transform viewport coordinates to SVG coordinates
+    // Map viewport coordinates to SVG coordinates
     const svgFromX = (fromPos.x - svgRect.left) * scaleX;
     const svgFromY = (fromPos.y - svgRect.top) * scaleY;
     const svgToX = (toPos.x - svgRect.left) * scaleX;
@@ -527,7 +527,7 @@ function drawConnectionLine(fromCell, toCell) {
     line.setAttribute('x2', svgToX);
     line.setAttribute('y2', svgToY);
     line.setAttribute('stroke', '#333333'); // Dark grey
-    line.setAttribute('stroke-width', '5'); // 5px wide line in SVG units
+    line.setAttribute('stroke-width', '2'); // Adjusted for smaller SVG units
     line.setAttribute('stroke-linecap', 'round'); // Optional: rounded ends
 
     // Append the line to the SVG group
@@ -750,8 +750,9 @@ input.addEventListener('keydown', async (e) => {
             return;
         }
 
-        // Declare baseRatio in the outer scope
+        // Declare baseRatio and round in the outer scope
         let baseRatio = 0;
+        let round = 0;
 
         // Read the current game state
         gameRef.once('value').then(async (snapshot) => {
@@ -767,7 +768,7 @@ input.addEventListener('keydown', async (e) => {
 
             // Get the current game state
             const currentGrid = gameData.grid || {};
-            const round = gameData.round || 0;
+            round = gameData.round || 0; // Assign to outer scope variable
             const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
 
             // Check if the player has 5 points to place a block anywhere
