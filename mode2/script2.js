@@ -170,9 +170,13 @@ function updateGrid(grid, round) {
                 console.log(`Rendering cell ${cellKey}:`, cellData);
                 cell.classList.add('filled', cellData.player);
                 if (!filledCells.has(cell)) {
-                    const node = document.createElement('div');
-                    node.classList.add('connection-node');
-                    cell.appendChild(node);
+                    // Ensure connection node exists
+                    let node = cell.querySelector('.connection-node');
+                    if (!node) {
+                        node = document.createElement('div');
+                        node.classList.add('connection-node');
+                        cell.appendChild(node);
+                    }
                     filledCells.set(cell, {
                         article: cellData.article,
                         imageUrl: cellData.imageUrl,
@@ -491,34 +495,24 @@ function getAbsolutePosition(element) {
 
 // Function to draw a connection line between two nodes using SVG
 function drawConnectionLine(fromCell, toCell) {
-    const fromNode = fromCell.querySelector('.connection-node');
-    const toNode = toCell.querySelector('.connection-node');
-    if (!fromNode || !toNode) {
-        console.log('Cannot draw line: fromNode or toNode not found');
-        return;
-    }
+    // Calculate SVG coordinates directly based on grid cell indices
+    const cellSize = 100; // Each cell is 100x100 pixels
+    const gapSize = 2; // Gap between cells
+    const totalCellSize = cellSize + gapSize; // Total size including gap
 
-    // Get the absolute positions of the nodes in viewport space (pixels)
-    const fromPos = getAbsolutePosition(fromNode);
-    const toPos = getAbsolutePosition(toNode);
+    // Get row and column indices
+    const fromRow = parseInt(fromCell.dataset.row);
+    const fromCol = parseInt(fromCell.dataset.col);
+    const toRow = parseInt(toCell.dataset.row);
+    const toCol = parseInt(toCell.dataset.col);
 
-    // Get the SVG's bounding rectangle to map viewport coordinates to SVG coordinates
-    const svgRect = svg.getBoundingClientRect();
-    const svgWidth = svgRect.width;
-    const svgHeight = svgRect.height;
-    const viewBox = svg.viewBox.baseVal;
-    const viewBoxWidth = viewBox.width; // 510
-    const viewBoxHeight = viewBox.height; // 510
-
-    // Calculate scale factors to map viewport pixels to SVG units
-    const scaleX = viewBoxWidth / svgWidth;
-    const scaleY = viewBoxHeight / svgHeight;
-
-    // Map viewport coordinates to SVG coordinates
-    const svgFromX = (fromPos.x - svgRect.left) * scaleX;
-    const svgFromY = (fromPos.y - svgRect.top) * scaleY;
-    const svgToX = (toPos.x - svgRect.left) * scaleX;
-    const svgToY = (toPos.y - svgRect.top) * scaleY;
+    // Calculate the center of each cell in SVG space
+    // The grid is 510x510 pixels (5 cells x 100px + 4 gaps x 2px), and viewBox is "0 0 510 510"
+    // Center of cell at (row, col) = (col * (cellSize + gapSize) + cellSize/2, row * (cellSize + gapSize) + cellSize/2)
+    const svgFromX = fromCol * totalCellSize + cellSize / 2;
+    const svgFromY = fromRow * totalCellSize + cellSize / 2;
+    const svgToX = toCol * totalCellSize + cellSize / 2;
+    const svgToY = toRow * totalCellSize + cellSize / 2;
 
     // Create an SVG line element
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -527,7 +521,7 @@ function drawConnectionLine(fromCell, toCell) {
     line.setAttribute('x2', svgToX);
     line.setAttribute('y2', svgToY);
     line.setAttribute('stroke', '#333333'); // Dark grey
-    line.setAttribute('stroke-width', '2'); // Adjusted for SVG units
+    line.setAttribute('stroke-width', '2'); // 2px wide line
     line.setAttribute('stroke-linecap', 'round'); // Optional: rounded ends
 
     // Append the line to the SVG group
