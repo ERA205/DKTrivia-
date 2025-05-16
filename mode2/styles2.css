@@ -61,7 +61,7 @@ body {
     font-weight: bold;
 }
 #main-svg {
-    width: 510px; /* 5 cells x 100px + 5 gaps x 2px = 510px */
+    width: 510px;
     height: 510px;
     position: fixed;
     top: 50%;
@@ -78,7 +78,7 @@ body {
     display: grid;
     grid-template-columns: repeat(5, 100px);
     grid-template-rows: repeat(5, 100px);
-    gap: 2px; /* Adjusted gap */
+    gap: 2px;
     z-index: 10;
 }
 
@@ -94,7 +94,7 @@ body {
 }
 
 #line-group {
-    z-index: 20; /* Ensure lines are above grid cells */
+    z-index: 20; /* Ensure circles are above grid cells */
 }
 
 .connection-node {
