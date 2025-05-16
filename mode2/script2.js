@@ -507,12 +507,20 @@ function drawConnectionLine(fromCell, toCell) {
     const toCol = parseInt(toCell.dataset.col);
 
     // Calculate the center of each cell in SVG space
-    // The grid is 510x510 pixels (5 cells x 100px + 4 gaps x 2px), and viewBox is "0 0 510 510"
     // Center of cell at (row, col) = (col * (cellSize + gapSize) + cellSize/2, row * (cellSize + gapSize) + cellSize/2)
-    const svgFromX = fromCol * totalCellSize + cellSize / 2;
-    const svgFromY = fromRow * totalCellSize + cellSize / 2;
-    const svgToX = toCol * totalCellSize + cellSize / 2;
-    const svgToY = toRow * totalCellSize + cellSize / 2;
+    let svgFromX = fromCol * totalCellSize + cellSize / 2;
+    let svgFromY = fromRow * totalCellSize + cellSize / 2;
+    let svgToX = toCol * totalCellSize + cellSize / 2;
+    let svgToY = toRow * totalCellSize + cellSize / 2;
+
+    // Adjust coordinates to account for the grid's centering
+    // The grid is 510x510 pixels, so its center is at (255, 255) in SVG space
+    // Shift the coordinates so (0, 0) aligns with the grid's top-left corner after centering
+    const gridOffset = 255; // Half of 510
+    svgFromX += gridOffset;
+    svgFromY += gridOffset;
+    svgToX += gridOffset;
+    svgToY += gridOffset;
 
     // Create an SVG line element
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -995,8 +1003,17 @@ input.addEventListener('keydown', async (e) => {
                 node: node
             });
 
+            // Ensure the DOM is updated before drawing the line
+            await new Promise(resolve => setTimeout(resolve, 0));
+
             // Draw the line immediately if a topic block exists and round > 1
             if (currentTopicCell && round > 1) {
+                // Verify the cells are correct
+                const fromRow = parseInt(currentTopicCell.dataset.row);
+                const fromCol = parseInt(currentTopicCell.dataset.col);
+                const toRow = parseInt(selectedCell.dataset.row);
+                const toCol = parseInt(selectedCell.dataset.col);
+                console.log(`Drawing line from topic cell (${fromRow}, ${fromCol}) to new cell (${toRow}, ${toCol})`);
                 drawConnectionLine(currentTopicCell, selectedCell);
             } else {
                 console.log(`Skipping line drawing: round ${round} <= 1 or no topic block`);
