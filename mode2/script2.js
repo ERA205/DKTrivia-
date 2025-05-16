@@ -561,38 +561,39 @@ function getAbsolutePosition(element) {
 
 // Function to draw a connection line between two nodes using SVG
 function drawConnectionLine(fromCell, toCell) {
-    // Calculate SVG coordinates directly based on grid cell indices
-    const cellSize = 100; // Each cell is 100x100 pixels
-    const gapSize = 2; // Gap between cells
-    const totalCellSize = cellSize + gapSize; // Total size including gap
+    const fromNode = fromCell.querySelector('.connection-node');
+    const toNode = toCell.querySelector('.connection-node');
+    if (!fromNode || !toNode) {
+        console.log('Cannot draw line: fromNode or toNode not found');
+        return;
+    }
 
-    // Get row and column indices
-    const fromRow = parseInt(fromCell.dataset.row);
-    const fromCol = parseInt(fromCell.dataset.col);
-    const toRow = parseInt(toCell.dataset.row);
-    const toCol = parseInt(toCell.dataset.col);
+    // Get the bounding rectangle of the grid container
+    const gridRect = gridContainer.getBoundingClientRect();
 
-    // Calculate the center of each cell in SVG space
-    // Center of cell at (row, col) = (col * (cellSize + gapSize) + cellSize/2, row * (cellSize + gapSize) + cellSize/2)
-    // Adjust for the viewBox centering: map to (-255, -255) to (255, 255)
-    const svgFromX = fromCol * totalCellSize + cellSize / 2 - 255;
-    const svgFromY = fromRow * totalCellSize + cellSize / 2 - 255;
-    const svgToX = toCol * totalCellSize + cellSize / 2 - 255;
-    const svgToY = toRow * totalCellSize + cellSize / 2 - 255;
+    // Get the bounding rectangles of the nodes
+    const fromRect = fromNode.getBoundingClientRect();
+    const toRect = toNode.getBoundingClientRect();
 
-    // Create an SVG line element
+    // Calculate center positions relative to the grid container
+    const fromX = fromRect.left - gridRect.left + fromRect.width / 2;
+    const fromY = fromRect.top - gridRect.top + fromRect.height / 2;
+    const toX = toRect.left - gridRect.left + toRect.width / 2;
+    const toY = toRect.top - gridRect.top + toRect.height / 2;
+
+    // Create the SVG line
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', svgFromX);
-    line.setAttribute('y1', svgFromY);
-    line.setAttribute('x2', svgToX);
-    line.setAttribute('y2', svgToY);
-    line.setAttribute('stroke', '#333333'); // Dark grey
-    line.setAttribute('stroke-width', '2'); // 2px wide line
-    line.setAttribute('stroke-linecap', 'round'); // Optional: rounded ends
+    line.setAttribute('x1', fromX);
+    line.setAttribute('y1', fromY);
+    line.setAttribute('x2', toX);
+    line.setAttribute('y2', toY);
+    line.setAttribute('stroke', '#333333');
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-linecap', 'round');
 
-    // Append the line to the SVG group
+    // Append to the line group
     lineGroup.appendChild(line);
-    console.log(`Line drawn from (${svgFromX}, ${svgFromY}) to (${svgToX}, ${svgToY})`);
+    console.log(`Line drawn from (${fromX}, ${fromY}) to (${toX}, ${toY})`);
 }
 
 // Generate the 5x5 grid
