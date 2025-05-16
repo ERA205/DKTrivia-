@@ -508,19 +508,11 @@ function drawConnectionLine(fromCell, toCell) {
 
     // Calculate the center of each cell in SVG space
     // Center of cell at (row, col) = (col * (cellSize + gapSize) + cellSize/2, row * (cellSize + gapSize) + cellSize/2)
-    let svgFromX = fromCol * totalCellSize + cellSize / 2;
-    let svgFromY = fromRow * totalCellSize + cellSize / 2;
-    let svgToX = toCol * totalCellSize + cellSize / 2;
-    let svgToY = toRow * totalCellSize + cellSize / 2;
-
-    // Adjust coordinates to account for the grid's centering
-    // The grid is 510x510 pixels, so its center is at (255, 255) in SVG space
-    // Shift the coordinates so (0, 0) aligns with the grid's top-left corner after centering
-    const gridOffset = 255; // Half of 510
-    svgFromX += gridOffset;
-    svgFromY += gridOffset;
-    svgToX += gridOffset;
-    svgToY += gridOffset;
+    // Adjust for the viewBox centering: map to (-255, -255) to (255, 255)
+    const svgFromX = fromCol * totalCellSize + cellSize / 2 - 255;
+    const svgFromY = fromRow * totalCellSize + cellSize / 2 - 255;
+    const svgToX = toCol * totalCellSize + cellSize / 2 - 255;
+    const svgToY = toRow * totalCellSize + cellSize / 2 - 255;
 
     // Create an SVG line element
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -898,7 +890,7 @@ input.addEventListener('keydown', async (e) => {
                         ].every(({ dr, dc }) => {
                             const nr = r + dr;
                             const nc = c + dc;
-                            if (nr < 0 || nr >= 5 || nc < 0 || nc >= 5) return true; // Out of bounds counts as surrounded
+                            if (nr < 0 || nr >= 5 || nc < 0 || nc < 5) return true; // Out of bounds counts as surrounded
                             const neighborKey = `${nr}_${nc}`;
                             const neighbor = currentGrid[neighborKey];
                             return neighbor && neighbor.player === playerNumber;
@@ -1013,8 +1005,12 @@ input.addEventListener('keydown', async (e) => {
                 const fromCol = parseInt(currentTopicCell.dataset.col);
                 const toRow = parseInt(selectedCell.dataset.row);
                 const toCol = parseInt(selectedCell.dataset.col);
-                console.log(`Drawing line from topic cell (${fromRow}, ${fromCol}) to new cell (${toRow}, ${toCol})`);
-                drawConnectionLine(currentTopicCell, selectedCell);
+                if (fromRow === toRow && fromCol === toCol) {
+                    console.error(`Error: Topic cell (${fromRow}, ${fromCol}) is the same as new cell (${toRow}, ${toCol}). Skipping line drawing.`);
+                } else {
+                    console.log(`Drawing line from topic cell (${fromRow}, ${fromCol}) to new cell (${toRow}, ${toCol})`);
+                    drawConnectionLine(currentTopicCell, selectedCell);
+                }
             } else {
                 console.log(`Skipping line drawing: round ${round} <= 1 or no topic block`);
             }
