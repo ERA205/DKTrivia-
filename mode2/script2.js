@@ -151,7 +151,8 @@ function updateGrid(grid, round) {
     // Clear existing grid visuals
     const cells = gridContainer.querySelectorAll('.grid-cell');
     cells.forEach(cell => {
-        cell.classList.remove('filled', 'player1', 'player2');
+        // Only remove 'filled' and player classes if the cell's data has changed
+        // We'll handle this in the rendering loop below
         while (cell.firstChild) cell.removeChild(cell.firstChild);
     });
     filledCells.clear();
@@ -168,8 +169,12 @@ function updateGrid(grid, round) {
             const cellData = gridData[cellKey];
             if (cellData) {
                 console.log(`Rendering cell ${cellKey} with player: ${cellData.player}`);
-                cell.classList.add('filled', cellData.player);
+                // Only update the cell's classes if it hasn't been filled yet
+                if (!cell.classList.contains('filled')) {
+                    cell.classList.add('filled', cellData.player);
+                }
                 if (!filledCells.has(cell)) {
+                    // Ensure connection node exists
                     let node = cell.querySelector('.connection-node');
                     if (!node) {
                         node = document.createElement('div');
@@ -184,18 +189,18 @@ function updateGrid(grid, round) {
                         node: node
                     });
 
-                    // Draw circle pattern if this cell connects to another block, but skip for the first two blocks (round <= 1)
+                    // Draw line if this cell connects to another block, but skip for the first two blocks (round <= 1)
                     if (cellData.connectionTo && round > 1) {
                         const [fromRow, fromCol] = cellData.connectionTo;
                         const fromCell = gridContainer.querySelector(`.grid-cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
                         if (fromCell) {
-                            console.log(`Drawing circle pattern from ${fromRow}_${fromCol} to ${row}_${col}`);
-                            drawCirclePattern(fromCell, cell);
+                            console.log(`Drawing line from ${fromRow}_${fromCol} to ${row}_${col}`);
+                            drawConnectionLine(fromCell, cell);
                         } else {
-                            console.log(`Could not draw circle pattern: fromCell at ${fromRow}_${fromCol} not found`);
+                            console.log(`Could not draw line: fromCell at ${fromRow}_${fromCol} not found`);
                         }
                     } else if (round <= 1) {
-                        console.log(`Skipping circle pattern for cell ${cellKey}: round ${round} <= 1`);
+                        console.log(`Skipping line drawing for cell ${cellKey}: round ${round} <= 1`);
                     }
                 }
             }
@@ -203,72 +208,7 @@ function updateGrid(grid, round) {
     }
 }
 
-function drawCirclePattern(fromCell, toCell) {
-    // Calculate SVG coordinates based on grid cell indices
-    const cellSize = 100; // Each cell is 100x100 pixels
-    const gapSize = 2; // Gap between cells
-    const totalCellSize = cellSize + gapSize; // Total size including gap
 
-    // Get row and column indices
-    const fromRow = parseInt(fromCell.dataset.row);
-    const fromCol = parseInt(fromCell.dataset.col);
-    const toRow = parseInt(toCell.dataset.row);
-    const toCol = parseInt(toCell.dataset.col);
-
-    // Calculate the center of each cell in SVG space
-    // Adjust for the viewBox centering: map to (-255, -255) to (255, 255)
-    const svgFromX = fromCol * totalCellSize + cellSize / 2 - 255;
-    const svgFromY = fromRow * totalCellSize + cellSize / 2 - 255;
-    const svgToX = toCol * totalCellSize + cellSize / 2 - 255;
-    const svgToY = toRow * totalCellSize + cellSize / 2 - 255;
-
-    // Determine if the connection is horizontal or vertical
-    const isHorizontal = fromRow === toRow;
-    const isVertical = fromCol === toCol;
-
-    // Number of circles to draw (including start and end points)
-    const numCircles = 5; // Adjust as needed for spacing
-    const circleRadius = 5; // Radius of each circle in SVG units
-
-    // Calculate the spacing between circles
-    let circlePositions = [];
-    if (isHorizontal) {
-        // Same y-coordinate, evenly spaced x-coordinates
-        const xStart = Math.min(svgFromX, svgToX);
-        const xEnd = Math.max(svgFromX, svgToX);
-        const xStep = (xEnd - xStart) / (numCircles - 1);
-        const y = svgFromY; // Same y-coordinate
-        for (let i = 0; i < numCircles; i++) {
-            const x = xStart + i * xStep;
-            circlePositions.push({ x, y });
-        }
-    } else if (isVertical) {
-        // Same x-coordinate, evenly spaced y-coordinates
-        const yStart = Math.min(svgFromY, svgToY);
-        const yEnd = Math.max(svgFromY, svgToY);
-        const yStep = (yEnd - yStart) / (numCircles - 1);
-        const x = svgFromX; // Same x-coordinate
-        for (let i = 0; i < numCircles; i++) {
-            const y = yStart + i * yStep;
-            circlePositions.push({ x, y });
-        }
-    } else {
-        console.log('Circle pattern only supported for horizontal or vertical connections.');
-        return;
-    }
-
-    // Draw the circles
-    circlePositions.forEach(pos => {
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', pos.x);
-        circle.setAttribute('cy', pos.y);
-        circle.setAttribute('r', circleRadius);
-        circle.setAttribute('fill', '#333333'); // Dark grey
-        lineGroup.appendChild(circle);
-    });
-
-    console.log(`Circle pattern drawn from (${svgFromX}, ${svgFromY}) to (${svgToX}, ${svgToY}) with ${numCircles} circles`);
-}
 
 function listenForGameUpdates() {
     let joinPopup = null; // Track the "Two players have joined!" popup
@@ -824,13 +764,12 @@ input.addEventListener('keydown', async (e) => {
                 }, 
                 grid: {},
                 round: 0,
-                ratios: { player1: [], player2: [] },
-                currentTurn: 'player1'
+                ratios: { player1: [], player2: [] }
             };
 
             // Get the current game state
             const currentGrid = gameData.grid || {};
-            round = gameData.round || 0;
+            round = gameData.round || 0; // Assign to outer scope variable
             const scores = gameData.scores || { player1: { cells: 0, points: 0 }, player2: { cells: 0, points: 0 } };
             const currentTurn = gameData.currentTurn || 'player1';
             playerNumber = currentTurn; // Ensure playerNumber matches the current turn
@@ -850,7 +789,7 @@ input.addEventListener('keydown', async (e) => {
             // If not the first two rounds (round > 1), require a topic block unless placing anywhere
             const row = parseInt(selectedCell.dataset.row);
             const col = parseInt(selectedCell.dataset.col);
-            if (!canPlaceAnywhere && round > 1) {
+            if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
                 if (!currentTopicCell) {
                     showPopup('No topic block selected. Click a filled block to set the topic.');
                     input.value = '';
@@ -888,7 +827,7 @@ input.addEventListener('keydown', async (e) => {
                 }
             } else {
                 // First block for each player (round 0 or 1) or placing anywhere, no connection check needed
-                baseRatio = 1;
+                baseRatio = 1; // First block has a ratio of 1
                 console.log(`First block ratio set to 1 for ${articleTitle}`);
             }
 
@@ -923,7 +862,7 @@ input.addEventListener('keydown', async (e) => {
             if (!ratios.player1) ratios.player1 = [];
             if (!ratios.player2) ratios.player2 = [];
 
-            if (round % 2 === 1 && round > 0) {
+            if (round % 2 === 1 && round > 0) { // End of a round (both players have placed a block)
                 ratios[playerNumber].push(baseRatio);
                 updates.ratios = ratios;
 
@@ -941,6 +880,7 @@ input.addEventListener('keydown', async (e) => {
                 }
                 updates.scores = scores;
             } else {
+                // Store the ratio for this move
                 ratios[playerNumber].push(baseRatio);
                 updates.ratios = ratios;
             }
@@ -951,6 +891,7 @@ input.addEventListener('keydown', async (e) => {
                     const key = `${r}_${c}`;
                     const cell = currentGrid[key];
                     if (cell && cell.player !== playerNumber) {
+                        // Check if the cell is surrounded by the current player's blocks
                         const surrounded = [
                             { dr: -1, dc: 0 }, // Up
                             { dr: 1, dc: 0 },  // Down
@@ -959,7 +900,7 @@ input.addEventListener('keydown', async (e) => {
                         ].every(({ dr, dc }) => {
                             const nr = r + dr;
                             const nc = c + dc;
-                            if (nr < 0 || nr >= 5 || nc < 0 || nc < 5) return true;
+                            if (nr < 0 || nr >= 5 || nc < 0 || nc >= 5) return true; // Out of bounds counts as surrounded
                             const neighborKey = `${nr}_${nc}`;
                             const neighbor = currentGrid[neighborKey];
                             return neighbor && neighbor.player === playerNumber;
@@ -986,6 +927,7 @@ input.addEventListener('keydown', async (e) => {
                         const currentOwner = cell.player;
                         const opposingPlayer = currentOwner === 'player1' ? 'player2' : 'player1';
 
+                        // Determine the maximum number of surrounding cells based on position
                         const directions = [
                             { dr: -1, dc: 0 }, // Up
                             { dr: 1, dc: 0 },  // Down
@@ -998,7 +940,7 @@ input.addEventListener('keydown', async (e) => {
                         directions.forEach(({ dr, dc }) => {
                             const nr = r + dr;
                             const nc = c + dc;
-                            if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) {
+                            if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) { // Valid cell within grid
                                 maxSurrounding++;
                                 const neighborKey = `${nr}_${nc}`;
                                 const neighbor = currentGrid[neighborKey];
@@ -1008,15 +950,16 @@ input.addEventListener('keydown', async (e) => {
                             }
                         });
 
+                        // Determine the capture threshold (more than 50%)
                         let captureThreshold;
-                        if (maxSurrounding === 4) {
-                            captureThreshold = 3;
-                        } else if (maxSurrounding === 3) {
-                            captureThreshold = 2;
-                        } else if (maxSurrounding === 2) {
-                            captureThreshold = 2;
+                        if (maxSurrounding === 4) { // Interior block
+                            captureThreshold = 3; // 3 out of 4
+                        } else if (maxSurrounding === 3) { // Edge block
+                            captureThreshold = 2; // 2 out of 3
+                        } else if (maxSurrounding === 2) { // Corner block
+                            captureThreshold = 2; // 2 out of 2
                         } else {
-                            continue;
+                            continue; // Skip if maxSurrounding is 0 or invalid
                         }
 
                         if (opposingCount >= captureThreshold) {
@@ -1062,23 +1005,23 @@ input.addEventListener('keydown', async (e) => {
                 node: node
             });
 
-            // Ensure the DOM is updated before drawing the circle pattern
+            // Ensure the DOM is updated before drawing the line
             await new Promise(resolve => setTimeout(resolve, 0));
 
-            // Draw the circle pattern if a topic block exists and round > 1
+            // Draw the line immediately if a topic block exists and round > 1
             if (currentTopicCell && round > 1) {
                 const fromRow = parseInt(currentTopicCell.dataset.row);
                 const fromCol = parseInt(currentTopicCell.dataset.col);
                 const toRow = parseInt(selectedCell.dataset.row);
                 const toCol = parseInt(selectedCell.dataset.col);
                 if (fromRow === toRow && fromCol === toCol) {
-                    console.error(`Error: Topic cell (${fromRow}, ${fromCol}) is the same as new cell (${toRow}, ${toCol}). Skipping circle pattern.`);
+                    console.error(`Error: Topic cell (${fromRow}, ${fromCol}) is the same as new cell (${toRow}, ${toCol}). Skipping line drawing.`);
                 } else {
-                    console.log(`Drawing circle pattern from topic cell (${fromRow}, ${fromCol}) to new cell (${toRow}, ${toCol})`);
-                    drawCirclePattern(currentTopicCell, selectedCell);
+                    console.log(`Drawing line from topic cell (${fromRow}, ${fromCol}) to new cell (${toRow}, ${toCol})`);
+                    drawConnectionLine(currentTopicCell, selectedCell);
                 }
             } else {
-                console.log(`Skipping circle pattern: round ${round} <= 1 or no topic block`);
+                console.log(`Skipping line drawing: round ${round} <= 1 or no topic block`);
             }
 
             console.log(`Filled cell at row ${selectedCell.dataset.row}, col ${selectedCell.dataset.col} with article: ${articleTitle}`);
