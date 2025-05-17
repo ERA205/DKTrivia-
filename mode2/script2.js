@@ -148,12 +148,15 @@ function joinGame(gameId) {
 function updateGrid(grid, round) {
     console.log('Updating grid with data:', grid);
 
-    // Clear existing grid visuals
+    // Clear existing grid visuals, but preserve connection nodes
     const cells = gridContainer.querySelectorAll('.grid-cell');
     cells.forEach(cell => {
-        // Only remove 'filled' and player classes if the cell's data has changed
-        // We'll handle this in the rendering loop below
-        while (cell.firstChild) cell.removeChild(cell.firstChild);
+        // Remove child elements except for .connection-node
+        Array.from(cell.children).forEach(child => {
+            if (!child.classList.contains('connection-node')) {
+                cell.removeChild(child);
+            }
+        });
     });
     filledCells.clear();
     lineGroup.innerHTML = ''; // Clear connection lines
@@ -565,7 +568,7 @@ function generateGrid() {
                         showPopup('Error updating topic block. Please try again.');
                     });
                     currentTopicArticle = cellData.article;
-                    currentTopicCell = cell;
+                    currentTopicCell = cell; // Ensure this is set immediately
                     console.log(`Displaying info for filled cell at row ${row}, col ${col}: ${cellData.article}`);
                     return;
                 }

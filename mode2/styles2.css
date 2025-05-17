@@ -78,11 +78,16 @@ body {
     width: 510px;
     height: 510px;
     position: fixed;
-    top: 55%; /* Match #grid-container */
+    top: 55%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 1;
-    pointer-events: none; /* Ensure SVG doesn't block clicks */
+    z-index: 15; /* Increased to be above grid cells (z-index: 10) */
+    pointer-events: none;
+}
+
+#line-group {
+    z-index: 20; /* Still above #main-svg, but relative to parent */
+    pointer-events: none;
 }
 
 .grid-cell {
@@ -93,12 +98,7 @@ body {
     cursor: pointer;
     box-sizing: border-box;
     position: relative;
-    z-index: 10; /* Ensure cells are above SVG */
-}
-
-#line-group {
-    z-index: 20; /* Ensure lines are above grid cells */
-    pointer-events: none; /* Lines don’t need to be interactive */
+    z-index: 10; /* Below #main-svg */
 }
 
 .connection-node {
@@ -108,7 +108,7 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: #333333; /* Dark grey for visibility; change to 'transparent' if desired */
+    background-color: #333333;
     border-radius: 50%;
     z-index: 30; /* Above lines */
 }
