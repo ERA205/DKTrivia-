@@ -172,10 +172,9 @@ function updateGrid(grid, round) {
             const cellData = gridData[cellKey];
             if (cellData) {
                 console.log(`Rendering cell ${cellKey} with player: ${cellData.player}`);
-                // Only update the cell's classes if it hasn't been filled yet
-                if (!cell.classList.contains('filled')) {
-                    cell.classList.add('filled', cellData.player);
-                }
+                // Update the cell's classes to reflect the current player
+                cell.classList.remove('player1', 'player2'); // Remove existing player classes
+                cell.classList.add('filled', cellData.player); // Add 'filled' and the current player class
                 if (!filledCells.has(cell)) {
                     // Ensure connection node exists
                     let node = cell.querySelector('.connection-node');
@@ -751,6 +750,10 @@ input.addEventListener('keydown', async (e) => {
         if (!articleTitle) {
             showPopup('No matching Wikipedia article found. Try again.');
             input.value = '';
+            if (selectedCell) {
+                selectedCell.classList.remove('selected');
+                selectedCell = null;
+            }
             return;
         }
 
@@ -796,6 +799,10 @@ input.addEventListener('keydown', async (e) => {
                 if (!currentTopicCell) {
                     showPopup('No topic block selected. Click a filled block to set the topic.');
                     input.value = '';
+                    if (selectedCell) {
+                        selectedCell.classList.remove('selected');
+                        selectedCell = null;
+                    }
                     return;
                 }
 
@@ -806,6 +813,10 @@ input.addEventListener('keydown', async (e) => {
                 if (!isAdjacentToCell(row, col, topicRow, topicCol)) {
                     showPopup('Selected cell must be adjacent to the topic block.');
                     input.value = '';
+                    if (selectedCell) {
+                        selectedCell.classList.remove('selected');
+                        selectedCell = null;
+                    }
                     return;
                 }
 
@@ -814,6 +825,10 @@ input.addEventListener('keydown', async (e) => {
                 if (!hasLink) {
                     showPopup('Input does not match. Try again.');
                     input.value = '';
+                    if (selectedCell) {
+                        selectedCell.classList.remove('selected');
+                        selectedCell = null;
+                    }
                     return;
                 }
 
