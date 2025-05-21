@@ -724,6 +724,7 @@ function displayGameWindow(articleData = null) {
             const isMyTurn = (currentTurn === 'player1' && players.player1 === currentUser.uid) ||
                              (currentTurn === 'player2' && players.player2 === currentUser.uid);
             const currentPlayerPoints = currentTurn === 'player1' ? (scores.player1.points || 0) : (scores.player2.points || 0);
+            const playerKey = currentTurn === 'player1' ? 'player1' : 'player2';
 
             if (isMyTurn && currentPlayerPoints >= 5) {
                 pointsContainer.appendChild(document.createElement('br'));
@@ -739,7 +740,12 @@ function displayGameWindow(articleData = null) {
                 freeBlockButton.style.marginTop = '5px';
                 freeBlockButton.addEventListener('click', () => {
                     usingFreeBlock = true; // Enable free block mode
-                    showPopup('You can now place a block anywhere. Select a square and enter an article.');
+                    // Deduct 5 points immediately
+                    const updatedScores = { ...scores };
+                    updatedScores[playerKey].points = (updatedScores[playerKey].points || 0) - 5;
+                    gameRef.update({ scores: updatedScores }).catch(error => {
+                        console.error('Error deducting points for free block:', error);
+                    });
                 });
                 pointsContainer.appendChild(freeBlockButton);
             }
@@ -879,9 +885,8 @@ input.addEventListener('keydown', async (e) => {
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
 
-        // If using a free block, deduct 5 points
+        // Reset usingFreeBlock after use
         if (usingFreeBlock) {
-            scores[playerNumber].points = (scores[playerNumber].points || 0) - 5;
             usingFreeBlock = false; // Reset after use
         }
 
