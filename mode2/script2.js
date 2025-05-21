@@ -27,6 +27,7 @@ const startGameButton = document.getElementById('start-game-button');
 
 // Create groups for lines
 const lineGroup = document.getElementById('line-group');
+let usingFreeBlock = false; // Tracks if the player is using a free block
 
 // Track the currently selected grid cell
 let selectedCell = null;
@@ -698,7 +699,9 @@ function displayGameWindow(articleData = null) {
         gameRef.once('value').then(snapshot => {
             const gameData = snapshot.val();
             const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
-            
+            const players = gameData?.players || { player1: null, player2: null };
+            const currentTurn = gameData?.currentTurn || 'player1';
+
             // Clear existing points content
             const existingPoints = gameWindow.querySelector('#points-container');
             if (existingPoints) {
@@ -716,6 +719,30 @@ function displayGameWindow(articleData = null) {
             p2PointsSpan.textContent = `Player 2 Points: ${scores.player2.points || 0}`;
             p2PointsSpan.style.color = '#FF4500'; // Orange Red for Player 2
             pointsContainer.appendChild(p2PointsSpan);
+
+            // Determine if the "Free Block" button should be shown
+            const isMyTurn = (currentTurn === 'player1' && players.player1 === currentUser.uid) ||
+                             (currentTurn === 'player2' && players.player2 === currentUser.uid);
+            const currentPlayerPoints = currentTurn === 'player1' ? (scores.player1.points || 0) : (scores.player2.points || 0);
+
+            if (isMyTurn && currentPlayerPoints >= 5) {
+                pointsContainer.appendChild(document.createElement('br'));
+                const freeBlockButton = document.createElement('button');
+                freeBlockButton.id = 'free-block-button';
+                freeBlockButton.textContent = 'Free Block';
+                freeBlockButton.style.backgroundColor = '#6273B4';
+                freeBlockButton.style.color = '#fff';
+                freeBlockButton.style.border = 'none';
+                freeBlockButton.style.padding = '5px 10px';
+                freeBlockButton.style.borderRadius = '5px';
+                freeBlockButton.style.cursor = 'pointer';
+                freeBlockButton.style.marginTop = '5px';
+                freeBlockButton.addEventListener('click', () => {
+                    usingFreeBlock = true; // Enable free block mode
+                    showPopup('You can now place a block anywhere. Select a square and enter an article.');
+                });
+                pointsContainer.appendChild(freeBlockButton);
+            }
 
             gameWindow.appendChild(pointsContainer);
         }).catch(error => {
@@ -792,21 +819,13 @@ input.addEventListener('keydown', async (e) => {
         playerNumber = currentTurn;
         console.log(`Current turn: ${currentTurn}, Player number: ${playerNumber}`);
 
-        // Check if the player has 5 points to place a block anywhere
-        const playerPoints = scores[playerNumber].points || 0;
-        let canPlaceAnywhere = false;
-        if (playerPoints >= 5) {
-            const usePoints = confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`);
-            if (usePoints) {
-                canPlaceAnywhere = true;
-                scores[playerNumber].points -= 5;
-            }
-        }
+        // Check if the player is using a free block
+        let canPlaceAnywhere = usingFreeBlock;
 
         // If not the first two rounds (round > 1), require a topic block unless placing anywhere
         const row = parseInt(selectedCell.dataset.row);
         const col = parseInt(selectedCell.dataset.col);
-        if (!canPlaceAnywhere && round > 1) {
+        if (!canPlaceAnywhere && round > 1) { // Round 0 (Player 1's first block) and Round 1 (Player 2's first block) allow placement anywhere
             if (!currentTopicCell) {
                 showPopup('No topic block selected. Click a filled block to set the topic.');
                 input.value = '';
@@ -855,12 +874,17 @@ input.addEventListener('keydown', async (e) => {
                 console.log(`No valid views data for ${articleTitle} or ${currentTopicArticle}, ratio set to 0`);
             }
         } else {
-            // First block for each player (round 0 or 1) or placing anywhere, no connection check needed
+            // First block for each player (round 0 or 1) or using a free block, no connection check needed
             baseRatio = 1; // First block has a ratio of 1
             console.log(`First block ratio set to 1 for ${articleTitle}`);
         }
 
-        // If we reach this point, all checks have passed; proceed with updating the game state
+        // If using a free block, deduct 5 points
+        if (usingFreeBlock) {
+            scores[playerNumber].points = (scores[playerNumber].points || 0) - 5;
+            usingFreeBlock = false; // Reset after use
+        }
+
         // Update the specific cell in the grid using "row_col" key
         const cellKey = `${row}_${col}`;
         currentGrid[cellKey] = {
