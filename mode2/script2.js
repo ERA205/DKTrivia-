@@ -28,6 +28,7 @@ const startGameButton = document.getElementById('start-game-button');
 // Create groups for lines
 const lineGroup = document.getElementById('line-group');
 let usingFreeBlock = false; // Tracks if the player is using a free block
+let lastTurnConceded = false; // Tracks if the previous turn was conceded
 
 // Track the currently selected grid cell
 let selectedCell = null;
@@ -750,6 +751,62 @@ function displayGameWindow(articleData = null) {
                 pointsContainer.appendChild(freeBlockButton);
             }
 
+            // Add "Concede Turn" button (always visible)
+            pointsContainer.appendChild(document.createElement('br'));
+            const concedeTurnButton = document.createElement('button');
+            concedeTurnButton.id = 'concede-turn-button';
+            concedeTurnButton.textContent = 'Concede Turn';
+            concedeTurnButton.style.backgroundColor = '#6273B4';
+            concedeTurnButton.style.color = '#fff';
+            concedeTurnButton.style.border = 'none';
+            concedeTurnButton.style.padding = '5px 10px';
+            concedeTurnButton.style.borderRadius = '5px';
+            concedeTurnButton.style.cursor = 'pointer';
+            concedeTurnButton.style.marginTop = '5px';
+            concedeTurnButton.addEventListener('click', () => {
+                // Fetch the latest game state to ensure we have the most current data
+                gameRef.once('value').then(snapshot => {
+                    const gameData = snapshot.val();
+                    const currentScores = gameData?.scores || { player1: { points: 0, cells: 0 }, player2: { points: 0, cells: 0 } };
+                    const currentTurn = gameData?.currentTurn || 'player1';
+
+                    // Determine the next player and award them a point
+                    const nextTurn = currentTurn === 'player1' ? 'player2' : 'player1';
+                    const updatedScores = { ...currentScores };
+                    updatedScores[nextTurn].points = (updatedScores[nextTurn].points || 0) + 1;
+
+                    // Check for consecutive concedes
+                    let updates = {
+                        currentTurn: nextTurn,
+                        scores: updatedScores
+                    };
+
+                    if (lastTurnConceded) {
+                        // Consecutive concede: end the game
+                        updates.status = 'finished';
+                        const winner = updatedScores.player1.cells > updatedScores.player2.cells ? 'Player 1' : 
+                                      updatedScores.player2.cells > updatedScores.player1.cells ? 'Player 2' : 'Tie';
+                        showPopup(`Game Over! Winner: ${winner}`, `
+                            <p>Player 1: ${updatedScores.player1.cells} cells</p>
+                            <p>Player 2: ${updatedScores.player2.cells} cells</p>
+                        `);
+                    }
+
+                    // Update lastTurnConceded
+                    lastTurnConceded = true;
+
+                    // Update Firebase
+                    gameRef.update(updates).catch(error => {
+                        console.error('Error conceding turn:', error);
+                        showPopup('Error conceding turn. Please try again.');
+                    });
+                }).catch(error => {
+                    console.error('Error fetching game state for concede turn:', error);
+                    showPopup('Error conceding turn. Please try again.');
+                });
+            });
+            pointsContainer.appendChild(concedeTurnButton);
+
             gameWindow.appendChild(pointsContainer);
         }).catch(error => {
             console.error('Error fetching scores for points display:', error);
@@ -1038,6 +1095,9 @@ input.addEventListener('keydown', async (e) => {
         if (filledCellsCount >= 25) {
             updates.status = 'finished';
         }
+
+        // Reset lastTurnConceded since a block was placed
+        lastTurnConceded = false;
 
         // Update Firebase
         await gameRef.update(updates);
