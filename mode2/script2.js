@@ -292,15 +292,9 @@ function listenForGameUpdates() {
             }
         }
 
-        // Handle game end
+        // Handle game end (stop listening, but popup is handled elsewhere)
         if (gameData.status === 'finished') {
-            const winner = gameData.scores.player1 > gameData.scores.player2 ? 'Player 1' : 
-                          gameData.scores.player2 > gameData.scores.player1 ? 'Player 2' : 'Tie';
-            showPopup(`Game Over! Winner: ${winner}`, `
-                <p>Player 1: ${gameData.scores.player1} cells</p>
-                <p>Player 2: ${gameData.scores.player2} cells</p>
-            `);
-            gameRef.off();
+            gameRef.off(); // Stop listening for updates
         }
     }, (error) => {
         console.error('Error listening for game updates:', error);
@@ -633,73 +627,91 @@ function displayGameWindow(articleData = null) {
     // Clear existing content except the button placeholder
     gameWindow.innerHTML = '';
 
-    if (!articleData) {
-        const placeholder = document.createElement('p');
-        placeholder.textContent = 'Territory 1 v 1 - Info Window';
-        placeholder.style.textAlign = 'center';
-        placeholder.style.color = '#6273B4';
-        placeholder.style.display = 'block';
-        placeholder.style.margin = '0 auto';
-        gameWindow.appendChild(placeholder);
-    } else {
-        if (articleData.imageUrl) {
-            const img = document.createElement('img');
-            img.src = articleData.imageUrl;
-            img.alt = `${articleData.title} main image`;
-            img.style.maxWidth = '100%';
-            img.style.maxHeight = '300px';
-            img.style.display = 'block';
-            img.style.margin = '0 auto';
-            gameWindow.appendChild(img);
-        } else {
+    // Fetch game state to determine if the game is over
+    gameRef.once('value').then(snapshot => {
+        const gameData = snapshot.val();
+        const gameStatus = gameData?.status || 'waiting';
+
+        // If the game is finished, show the game-over popup (only once)
+        if (gameStatus === 'finished') {
+            const scores = gameData?.scores || { player1: { points: 0, cells: 0 }, player2: { points: 0, cells: 0 } };
+            const winner = scores.player1.cells > scores.player2.cells ? 'Player 1' : 
+                          scores.player2.cells > scores.player1.cells ? 'Player 2' : 'Tie';
+            // Only show the popup if it hasn't been shown yet (using a flag)
+            if (!gameWindow.dataset.gameOverPopupShown) {
+                showPopup(`Game Over! Winner: ${winner}`, `
+                    <p>Player 1: ${scores.player1.cells} cells</p>
+                    <p>Player 2: ${scores.player2.cells} cells</p>
+                `);
+                gameWindow.dataset.gameOverPopupShown = 'true'; // Prevent duplicate popups
+            }
+            return; // Stop rendering the info window since the game is over
+        }
+
+        if (!articleData) {
             const placeholder = document.createElement('p');
-            placeholder.textContent = 'No main image available';
+            placeholder.textContent = 'Territory 1 v 1 - Info Window';
             placeholder.style.textAlign = 'center';
             placeholder.style.color = '#6273B4';
             placeholder.style.display = 'block';
             placeholder.style.margin = '0 auto';
             gameWindow.appendChild(placeholder);
-        }
+        } else {
+            if (articleData.imageUrl) {
+                const img = document.createElement('img');
+                img.src = articleData.imageUrl;
+                img.alt = `${articleData.title} main image`;
+                img.style.maxWidth = '100%';
+                img.style.maxHeight = '300px';
+                img.style.display = 'block';
+                img.style.margin = '0 auto';
+                gameWindow.appendChild(img);
+            } else {
+                const placeholder = document.createElement('p');
+                placeholder.textContent = 'No main image available';
+                placeholder.style.textAlign = 'center';
+                placeholder.style.color = '#6273B4';
+                placeholder.style.display = 'block';
+                placeholder.style.margin = '0 auto';
+                gameWindow.appendChild(placeholder);
+            }
 
-        const titleText = document.createElement('p');
-        titleText.style.textAlign = 'center';
-        titleText.style.margin = '10px 0 0 0';
-        titleText.style.fontFamily = 'Arial, sans-serif';
-        titleText.style.fontSize = '14px';
-        titleText.style.fontWeight = 'bold';
-        titleText.textContent = articleData.title;
-        gameWindow.appendChild(titleText);
+            const titleText = document.createElement('p');
+            titleText.style.textAlign = 'center';
+            titleText.style.margin = '10px 0 0 0';
+            titleText.style.fontFamily = 'Arial, sans-serif';
+            titleText.style.fontSize = '14px';
+            titleText.style.fontWeight = 'bold';
+            titleText.textContent = articleData.title;
+            gameWindow.appendChild(titleText);
 
-        const viewsText = document.createElement('p');
-        viewsText.style.textAlign = 'center';
-        viewsText.style.margin = '10px 0 0 0';
-        viewsText.style.fontFamily = 'Arial, sans-serif';
-        viewsText.style.fontSize = '14px';
-        
-        const viewsLabelSpan = document.createElement('span');
-        viewsLabelSpan.textContent = 'Monthly Views: ';
-        viewsLabelSpan.style.color = '#000000';
-        
-        const viewsSpan = document.createElement('span');
-        viewsSpan.style.color = '#6273B4';
-        viewsSpan.textContent = articleData.views;
-        
-        viewsText.appendChild(viewsLabelSpan);
-        viewsText.appendChild(viewsSpan);
-        gameWindow.appendChild(viewsText);
+            const viewsText = document.createElement('p');
+            viewsText.style.textAlign = 'center';
+            viewsText.style.margin = '10px 0 0 0';
+            viewsText.style.fontFamily = 'Arial, sans-serif';
+            viewsText.style.fontSize = '14px';
+            
+            const viewsLabelSpan = document.createElement('span');
+            viewsLabelSpan.textContent = 'Monthly Views: ';
+            viewsLabelSpan.style.color = '#000000';
+            
+            const viewsSpan = document.createElement('span');
+            viewsSpan.style.color = '#6273B4';
+            viewsSpan.textContent = articleData.views;
+            
+            viewsText.appendChild(viewsLabelSpan);
+            viewsText.appendChild(viewsSpan);
+            gameWindow.appendChild(viewsText);
 
-        // Create a container for scores to avoid duplication
-        const pointsContainer = document.createElement('div');
-        pointsContainer.id = 'points-container';
-        pointsContainer.style.textAlign = 'center';
-        pointsContainer.style.margin = '10px 0 0 0';
-        pointsContainer.style.fontFamily = 'Arial, sans-serif';
-        pointsContainer.style.fontSize = '14px';
+            // Create a container for scores to avoid duplication
+            const pointsContainer = document.createElement('div');
+            pointsContainer.id = 'points-container';
+            pointsContainer.style.textAlign = 'center';
+            pointsContainer.style.margin = '10px 0 0 0';
+            pointsContainer.style.fontFamily = 'Arial, sans-serif';
+            pointsContainer.style.fontSize = '14px';
 
-        // Fetch scores to display points
-        gameRef.once('value').then(snapshot => {
-            const gameData = snapshot.val();
-            const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
+            const scores = gameData?.scores || { player1: { points: 0, cells: 0 }, player2: { points: 0, cells: 0 } };
             const players = gameData?.players || { player1: null, player2: null };
             const currentTurn = gameData?.currentTurn || 'player1';
 
@@ -808,10 +820,10 @@ function displayGameWindow(articleData = null) {
             pointsContainer.appendChild(concedeTurnButton);
 
             gameWindow.appendChild(pointsContainer);
-        }).catch(error => {
-            console.error('Error fetching scores for points display:', error);
-        });
-    }
+        }
+    }).catch(error => {
+        console.error('Error fetching scores for points display:', error);
+    });
 
     // Re-append the "Start Game" button if it exists
     if (buttonHtml) {
