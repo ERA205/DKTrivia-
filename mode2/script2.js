@@ -803,19 +803,22 @@ function displayGameWindow(articleData = null) {
                 pointsContainer.appendChild(freeBlockButton);
             }
 
-            // Add "Concede Turn" button (always visible)
+            // Add "Concede Turn" button (always visible, but disabled if not player's turn)
             pointsContainer.appendChild(document.createElement('br'));
             const concedeTurnButton = document.createElement('button');
             concedeTurnButton.id = 'concede-turn-button';
             concedeTurnButton.textContent = 'Concede Turn';
-            concedeTurnButton.style.backgroundColor = '#6273B4';
+            concedeTurnButton.style.backgroundColor = isMyTurn ? '#6273B4' : '#cccccc'; // Greyed out if not player's turn
             concedeTurnButton.style.color = '#fff';
             concedeTurnButton.style.border = 'none';
             concedeTurnButton.style.padding = '5px 10px';
             concedeTurnButton.style.borderRadius = '5px';
-            concedeTurnButton.style.cursor = 'pointer';
+            concedeTurnButton.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
             concedeTurnButton.style.marginTop = '5px';
+            concedeTurnButton.disabled = !isMyTurn; // Disable button if not player's turn
             concedeTurnButton.addEventListener('click', () => {
+                if (!isMyTurn) return; // Extra safeguard (shouldn't be needed with disabled)
+
                 // Fetch the latest game state to ensure we have the most current data
                 gameRef.once('value').then(snapshot => {
                     const gameData = snapshot.val();
