@@ -282,17 +282,13 @@ function listenForGameUpdates() {
             });
         }
 
-        // Remove join popup and hide Start Game button when game starts
+        // Remove join popup when game starts
         if (gameData.status === 'active' && joinPopup) {
             joinPopup.remove();
             joinPopup = null;
-            const startButton = document.getElementById('start-game-button');
-            if (startButton) {
-                startButton.style.display = 'none';
-            }
         }
 
-        // Handle game end (stop listening, but popup is handled elsewhere)
+        // Handle game end (stop listening)
         if (gameData.status === 'finished') {
             gameRef.off(); // Stop listening for updates
         }
@@ -620,24 +616,19 @@ function displayGameWindow(articleData = null) {
     gameWindow.style.paddingBottom = '10px';
     gameWindow.style.boxSizing = 'border-box';
 
-    // Preserve the "Start Game" button
-    const startButton = gameWindow.querySelector('#start-game-button');
-    const buttonHtml = startButton ? startButton.outerHTML : '';
-
-    // Clear existing content except the button placeholder
-    gameWindow.innerHTML = '';
-
-    // Fetch game state to determine if the game is over
+    // Fetch game state to determine the current state
     gameRef.once('value').then(snapshot => {
         const gameData = snapshot.val();
         const gameStatus = gameData?.status || 'waiting';
+
+        // Clear existing content
+        gameWindow.innerHTML = '';
 
         // If the game is finished, show the game-over popup (only once)
         if (gameStatus === 'finished') {
             const scores = gameData?.scores || { player1: { points: 0, cells: 0 }, player2: { points: 0, cells: 0 } };
             const winner = scores.player1.cells > scores.player2.cells ? 'Player 1' : 
                           scores.player2.cells > scores.player1.cells ? 'Player 2' : 'Tie';
-            // Only show the popup if it hasn't been shown yet (using a flag)
             if (!gameWindow.dataset.gameOverPopupShown) {
                 showPopup(`Game Over! Winner: ${winner}`, `
                     <p>Player 1: ${scores.player1.cells} cells</p>
@@ -645,8 +636,34 @@ function displayGameWindow(articleData = null) {
                 `);
                 gameWindow.dataset.gameOverPopupShown = 'true'; // Prevent duplicate popups
             }
+
+            // Show a "Start New Game" button to reset the game
+            const startNewGameButton = document.createElement('button');
+            startNewGameButton.id = 'start-game-button';
+            startNewGameButton.textContent = 'Start New Game';
+            startNewGameButton.style.backgroundColor = '#6273B4';
+            startNewGameButton.style.color = '#fff';
+            startNewGameButton.style.border = 'none';
+            startNewGameButton.style.padding = '10px 20px';
+            startNewGameButton.style.borderRadius = '5px';
+            startNewGameButton.style.cursor = 'pointer';
+            startNewGameButton.style.display = 'block';
+            startNewGameButton.style.margin = '10px auto';
+            startNewGameButton.addEventListener('click', () => {
+                if (!currentUser) {
+                    showPopup('Please wait, signing in...');
+                    return;
+                }
+                startNewGame();
+                // Reset the game-over popup flag
+                gameWindow.dataset.gameOverPopupShown = '';
+            });
+            gameWindow.appendChild(startNewGameButton);
             return; // Stop rendering the info window since the game is over
         }
+
+        // Reset the game-over popup flag if the game is not finished
+        gameWindow.dataset.gameOverPopupShown = '';
 
         if (!articleData) {
             const placeholder = document.createElement('p');
@@ -656,6 +673,29 @@ function displayGameWindow(articleData = null) {
             placeholder.style.display = 'block';
             placeholder.style.margin = '0 auto';
             gameWindow.appendChild(placeholder);
+
+            // Show the "Start Game" button if the game hasn't started
+            if (gameStatus === 'waiting') {
+                const startGameButton = document.createElement('button');
+                startGameButton.id = 'start-game-button';
+                startGameButton.textContent = 'Start Game';
+                startGameButton.style.backgroundColor = '#6273B4';
+                startGameButton.style.color = '#fff';
+                startGameButton.style.border = 'none';
+                startGameButton.style.padding = '10px 20px';
+                startGameButton.style.borderRadius = '5px';
+                startGameButton.style.cursor = 'pointer';
+                startGameButton.style.display = 'block';
+                startGameButton.style.margin = '10px auto';
+                startGameButton.addEventListener('click', () => {
+                    if (!currentUser) {
+                        showPopup('Please wait, signing in...');
+                        return;
+                    }
+                    startNewGame();
+                });
+                gameWindow.appendChild(startGameButton);
+            }
         } else {
             if (articleData.imageUrl) {
                 const img = document.createElement('img');
@@ -824,22 +864,6 @@ function displayGameWindow(articleData = null) {
     }).catch(error => {
         console.error('Error fetching scores for points display:', error);
     });
-
-    // Re-append the "Start Game" button if it exists
-    if (buttonHtml) {
-        gameWindow.innerHTML += buttonHtml;
-        // Re-attach event listener to the new button instance
-        const newButton = gameWindow.querySelector('#start-game-button');
-        if (newButton) {
-            newButton.addEventListener('click', () => {
-                if (!currentUser) {
-                    showPopup('Please wait, signing in...');
-                    return;
-                }
-                startNewGame();
-            });
-        }
-    }
 }
 
 // Handle text input
