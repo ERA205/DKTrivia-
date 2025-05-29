@@ -1689,6 +1689,61 @@ document.getElementById('profile-button').addEventListener('click', () => {
     document.body.appendChild(popup);
 });
 
+// Handle Free Play button click
+document.getElementById('free-play-button').addEventListener('click', () => {
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    popup.innerHTML = `
+        <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Free Play Settings</p>
+        <div style="text-align: left; padding: 0 20px;">
+            <label for="free-play-topic">Topic:</label><br>
+            <input type="text" id="free-play-topic" style="width: 100%; margin-bottom: 10px; padding: 5px;" placeholder="Enter your topic"><br>
+            <label for="free-play-block-count">Number of Blocks:</label><br>
+            <input type="number" id="free-play-block-count" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter block count" min="1"><br>
+        </div>
+        <button id="start-free-play-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Start Free Play</button>
+        <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
+    `;
+    
+    // Add event listener for starting Free Play
+    popup.querySelector('#start-free-play-button').addEventListener('click', async () => {
+        const topicInput = popup.querySelector('#free-play-topic').value.trim();
+        const blockCountInput = popup.querySelector('#free-play-block-count').value;
+
+        // Validate inputs
+        if (!topicInput) {
+            alert('Please enter a topic.');
+            return;
+        }
+        if (!blockCountInput || blockCountInput < 1) {
+            alert('Please enter a valid number of blocks (at least 1).');
+            return;
+        }
+
+        // Fetch the Wikipedia article title for the custom topic
+        const customTopic = await getWikipediaArticleTitle(topicInput);
+        if (!customTopic) {
+            alert('No matching Wikipedia article found for the topic. Try again.');
+            return;
+        }
+
+        // Update game settings with user inputs
+        dailyTopic = customTopic;
+        blockLimit = parseInt(blockCountInput);
+        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit}`);
+
+        // Reset the game with the new settings
+        await resetGame();
+
+        // Close the popup
+        popup.remove();
+    });
+
+    // Add event listener for closing the popup
+    popup.querySelector('button:last-child').addEventListener('click', () => popup.remove());
+    document.body.appendChild(popup);
+});
+
 svg.addEventListener('mouseup', () => {
     isDragging = false;
     console.log('Canvas drag ended: isDragging =', isDragging);
