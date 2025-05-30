@@ -1698,7 +1698,7 @@ document.getElementById('free-play-button').addEventListener('click', () => {
         <div style="text-align: left; padding: 0 20px;">
             <label for="free-play-topic">Topic:</label><br>
             <input type="text" id="free-play-topic" style="width: 100%; margin-bottom: 10px; padding: 5px;" placeholder="Enter your topic"><br>
-            <label for="free-play-block-count">Number of Blocks:</label><br>
+            <label for="free-play-block-count">Number of Additional Blocks:</label><br>
             <input type="number" id="free-play-block-count" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter block count" min="1"><br>
         </div>
         <button id="start-free-play-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Start Free Play</button>
@@ -1729,11 +1729,18 @@ document.getElementById('free-play-button').addEventListener('click', () => {
 
         // Update game settings with user inputs
         dailyTopic = customTopic;
-        blockLimit = parseInt(blockCountInput);
-        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit}`);
+        // User input is the number of additional blocks; add 1 for the initial block
+        blockLimit = parseInt(blockCountInput) + 1;
+        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit} (including initial block)`);
+
+        // Log blockLimit before resetGame
+        console.log(`Before resetGame: blockLimit = ${blockLimit}`);
 
         // Reset the game with the new settings
         await resetGame();
+
+        // Log blockLimit after resetGame
+        console.log(`After resetGame: blockLimit = ${blockLimit}`);
 
         // Close the popup
         popup.remove();
