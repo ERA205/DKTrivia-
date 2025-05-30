@@ -860,7 +860,8 @@ async function displayMainImage(articleTitle) {
     gameWindow.appendChild(scoreText);
 
     // Add blocks left text
-    const blocksLeft = 11 - allBlocks.length;
+    console.log(`displayMainImage: blockLimit = ${blockLimit}, allBlocks.length = ${allBlocks.length}`);
+    const blocksLeft = blockLimit - allBlocks.length;
     const blocksText = document.createElement('p');
     blocksText.style.textAlign = 'center';
     blocksText.style.margin = '10px 0 0 0';
@@ -880,7 +881,8 @@ async function displayMainImage(articleTitle) {
     gameWindow.appendChild(blocksText);
 
     // Add "Visit Article" button if game is over
-    if (allBlocks.length === 11) {
+    console.log(`Checking Visit Article button: allBlocks.length = ${allBlocks.length}, blockLimit = ${blockLimit}`);
+    if (allBlocks.length === blockLimit) {
         const visitButton = document.createElement('button');
         visitButton.textContent = 'Visit Article';
         visitButton.style.backgroundColor = '#6273B4';
@@ -896,12 +898,12 @@ async function displayMainImage(articleTitle) {
         visitButton.addEventListener('click', () => {
             const wikiUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(articleTitle.replace(/\s+/g, '_'))}`;
             window.open(wikiUrl, '_blank');
-          // Log game complete event
-        analytics.logEvent('game_complete', {
-        score: totalScore,
-        initial_block: initialBlockTitle,
-        user_id: currentUser ? currentUser.uid : userIdentifier
-});  
+            // Log game complete event
+            analytics.logEvent('game_complete', {
+                score: totalScore,
+                initial_block: initialBlockTitle,
+                user_id: currentUser ? currentUser.uid : userIdentifier
+            });  
         });
         gameWindow.appendChild(visitButton);
     }
