@@ -62,6 +62,8 @@ let topicBlock = null;
 let gameCsvData = [];
 let movableBlock = null; // For tracking the block being dragged
 let initialBlock = null; // Reference to the initial block
+let lastDisplayedArticle = null; // Track the last article displayed in gameWindow
+
 
 // Canvas dragging variables
 let isDragging = false;
@@ -184,6 +186,7 @@ async function getDailyTopic() {
         return "Photosynthesis"; // Fallback to a default topic
     }
 }
+
 // Set the initial topic for the game
 let dailyTopic;
 getDailyTopic().then(topic => {
@@ -768,8 +771,17 @@ async function resetGame() {
     input.style.display = 'block';
     console.log('Game reset: Text input box shown');
 }
-// Function to display the main image in the game window and adds views 
+
+// Function to display the main image in the game window and add views 
 async function displayMainImage(articleTitle) {
+    // Skip if the article hasn't changed
+    if (lastDisplayedArticle === articleTitle) {
+        console.log(`displayMainImage skipped: Article ${articleTitle} already displayed`);
+        return;
+    }
+
+    console.log(`displayMainImage called for article: ${articleTitle}, gameWindow content before: ${gameWindow.innerHTML}`);
+
     // Set game window styles for consistent width and uniform x-axis padding
     gameWindow.style.width = '300px';
     gameWindow.style.paddingLeft = '2%';
@@ -781,19 +793,36 @@ async function displayMainImage(articleTitle) {
 
     gameWindow.innerHTML = '';
 
-    const imageUrl = await fetchMainImage(articleTitle);
-    if (imageUrl) {
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        img.alt = `${articleTitle} main image`;
-        img.style.maxWidth = '100%';
-        img.style.maxHeight = '300px';
-        img.style.display = 'block';
-        img.style.margin = '0 auto';
-        gameWindow.appendChild(img);
-    } else {
+    // Fetch and display the main image
+    try {
+        let imageUrl = imageCache.get(articleTitle);
+        if (!imageUrl) {
+            imageUrl = await withTimeout(fetchMainImage(articleTitle), 5000); // 5-second timeout
+            imageCache.set(articleTitle, imageUrl);
+        }
+        if (imageUrl) {
+            const img = document.createElement('img');
+            img.src = imageUrl;
+            img.alt = `${articleTitle} main image`;
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '300px';
+            img.style.display = 'block';
+            img.style.margin = '0 auto';
+            gameWindow.appendChild(img);
+        } else {
+            const placeholder = document.createElement('p');
+            placeholder.textContent = 'No main image available';
+            placeholder.style.textAlign = 'center';
+            placeholder.style.color = '#6273B4';
+            placeholder.style.display = 'block';
+            placeholder.style.margin = '0 auto';
+            gameWindow.appendChild(placeholder);
+        }
+    } catch (error) {
+        console.error(`Error displaying main image for "${articleTitle}":`, error);
+        showPopup(`Failed to load image for "${articleTitle}". Please try again.`);
         const placeholder = document.createElement('p');
-        placeholder.textContent = 'No main image available';
+        placeholder.textContent = 'Error loading image';
         placeholder.style.textAlign = 'center';
         placeholder.style.color = '#6273B4';
         placeholder.style.display = 'block';
@@ -802,23 +831,40 @@ async function displayMainImage(articleTitle) {
     }
 
     // Add monthly views text
-    const viewsText = document.createElement('p');
-    viewsText.style.textAlign = 'center';
-    viewsText.style.margin = '10px 0 0 0';
-    viewsText.style.fontFamily = 'Arial, sans-serif';
-    viewsText.style.fontSize = '14px';
-    
-    const viewsLabelSpan = document.createElement('span');
-    viewsLabelSpan.textContent = 'Monthly Views: ';
-    viewsLabelSpan.style.color = '#000000';
-    
-    const viewsSpan = document.createElement('span');
-    viewsSpan.style.color = '#6273B4';
-    viewsSpan.textContent = await fetchAverageMonthlyViews(articleTitle);
-    
-    viewsText.appendChild(viewsLabelSpan);
-    viewsText.appendChild(viewsSpan);
-    gameWindow.appendChild(viewsText);
+    try {
+        let viewsTextContent = viewsCache.get(articleTitle);
+        if (!viewsTextContent) {
+            viewsTextContent = await withTimeout(fetchAverageMonthlyViews(articleTitle), 5000); // 5-second timeout
+            viewsCache.set(articleTitle, viewsTextContent);
+        }
+        const viewsText = document.createElement('p');
+        viewsText.style.textAlign = 'center';
+        viewsText.style.margin = '10px 0 0 0';
+        viewsText.style.fontFamily = 'Arial, sans-serif';
+        viewsText.style.fontSize = '14px';
+        
+        const viewsLabelSpan = document.createElement('span');
+        viewsLabelSpan.textContent = 'Monthly Views: ';
+        viewsLabelSpan.style.color = '#000000';
+        
+        const viewsSpan = document.createElement('span');
+        viewsSpan.style.color = '#6273B4';
+        viewsSpan.textContent = viewsTextContent;
+        
+        viewsText.appendChild(viewsLabelSpan);
+        viewsText.appendChild(viewsSpan);
+        gameWindow.appendChild(viewsText);
+    } catch (error) {
+        console.error(`Error displaying monthly views for "${articleTitle}":`, error);
+        showPopup(`Failed to load monthly views for "${articleTitle}". Please try again.`);
+        const viewsText = document.createElement('p');
+        viewsText.style.textAlign = 'center';
+        viewsText.style.margin = '10px 0 0 0';
+        viewsText.style.fontFamily = 'Arial, sans-serif';
+        viewsText.style.fontSize = '14px';
+        viewsText.textContent = 'Monthly Views: Error';
+        gameWindow.appendChild(viewsText);
+    }
 
     // Add points earned text
     const pointsEarned = gameCsvData.find(data => data.article === articleTitle)?.pointsEarned || 0;
@@ -859,10 +905,11 @@ async function displayMainImage(articleTitle) {
     scoreText.appendChild(scoreSpan);
     gameWindow.appendChild(scoreText);
 
-    // Add blocks left text
+    // Add blocks left text (always display, even if API calls fail)
     console.log(`displayMainImage: blockLimit = ${blockLimit}, allBlocks.length = ${allBlocks.length}`);
     const blocksLeft = blockLimit - allBlocks.length;
     const blocksText = document.createElement('p');
+    blocksText.className = 'blocks-left'; // Add a class for specific styling
     blocksText.style.textAlign = 'center';
     blocksText.style.margin = '10px 0 0 0';
     blocksText.style.fontFamily = 'Arial, sans-serif';
@@ -907,6 +954,11 @@ async function displayMainImage(articleTitle) {
         });
         gameWindow.appendChild(visitButton);
     }
+
+    // Update the last displayed article
+    lastDisplayedArticle = articleTitle;
+
+    console.log(`displayMainImage finished, gameWindow content after: ${gameWindow.innerHTML}`);
 }
 // Function to fetch wikitext and check for hyperlinks bidirectionally
 async function checkWikitextForLink(subjectTitle, topicTitle) {
