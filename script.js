@@ -1,3 +1,4 @@
+
 // Initialize Firebase using the global firebase object (from CDN)
 const firebaseConfig = {
     apiKey: "FIREBASE_API_KEY_PLACEHOLDER",
@@ -62,8 +63,7 @@ let topicBlock = null;
 let gameCsvData = [];
 let movableBlock = null; // For tracking the block being dragged
 let initialBlock = null; // Reference to the initial block
-let lastDisplayedArticle = null; // Track the last article displayed in gameWindow
-
+let blockLimit = 11; // Default block limit for main game mode (10 blocks left after initial block)
 
 // Canvas dragging variables
 let isDragging = false;
@@ -186,7 +186,6 @@ async function getDailyTopic() {
         return "Photosynthesis"; // Fallback to a default topic
     }
 }
-
 // Set the initial topic for the game
 let dailyTopic;
 getDailyTopic().then(topic => {
@@ -772,16 +771,8 @@ async function resetGame() {
     console.log('Game reset: Text input box shown');
 }
 
-// Function to display the main image in the game window and add views 
+// Function to display the main image in the game window and adds views 
 async function displayMainImage(articleTitle) {
-    // Skip if the article hasn't changed
-    if (lastDisplayedArticle === articleTitle) {
-        console.log(`displayMainImage skipped: Article ${articleTitle} already displayed`);
-        return;
-    }
-
-    console.log(`displayMainImage called for article: ${articleTitle}, gameWindow content before: ${gameWindow.innerHTML}`);
-
     // Set game window styles for consistent width and uniform x-axis padding
     gameWindow.style.width = '300px';
     gameWindow.style.paddingLeft = '2%';
@@ -793,36 +784,19 @@ async function displayMainImage(articleTitle) {
 
     gameWindow.innerHTML = '';
 
-    // Fetch and display the main image
-    try {
-        let imageUrl = imageCache.get(articleTitle);
-        if (!imageUrl) {
-            imageUrl = await withTimeout(fetchMainImage(articleTitle), 5000); // 5-second timeout
-            imageCache.set(articleTitle, imageUrl);
-        }
-        if (imageUrl) {
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.alt = `${articleTitle} main image`;
-            img.style.maxWidth = '100%';
-            img.style.maxHeight = '300px';
-            img.style.display = 'block';
-            img.style.margin = '0 auto';
-            gameWindow.appendChild(img);
-        } else {
-            const placeholder = document.createElement('p');
-            placeholder.textContent = 'No main image available';
-            placeholder.style.textAlign = 'center';
-            placeholder.style.color = '#6273B4';
-            placeholder.style.display = 'block';
-            placeholder.style.margin = '0 auto';
-            gameWindow.appendChild(placeholder);
-        }
-    } catch (error) {
-        console.error(`Error displaying main image for "${articleTitle}":`, error);
-        showPopup(`Failed to load image for "${articleTitle}". Please try again.`);
+    const imageUrl = await fetchMainImage(articleTitle);
+    if (imageUrl) {
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.alt = `${articleTitle} main image`;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '300px';
+        img.style.display = 'block';
+        img.style.margin = '0 auto';
+        gameWindow.appendChild(img);
+    } else {
         const placeholder = document.createElement('p');
-        placeholder.textContent = 'Error loading image';
+        placeholder.textContent = 'No main image available';
         placeholder.style.textAlign = 'center';
         placeholder.style.color = '#6273B4';
         placeholder.style.display = 'block';
@@ -831,40 +805,23 @@ async function displayMainImage(articleTitle) {
     }
 
     // Add monthly views text
-    try {
-        let viewsTextContent = viewsCache.get(articleTitle);
-        if (!viewsTextContent) {
-            viewsTextContent = await withTimeout(fetchAverageMonthlyViews(articleTitle), 5000); // 5-second timeout
-            viewsCache.set(articleTitle, viewsTextContent);
-        }
-        const viewsText = document.createElement('p');
-        viewsText.style.textAlign = 'center';
-        viewsText.style.margin = '10px 0 0 0';
-        viewsText.style.fontFamily = 'Arial, sans-serif';
-        viewsText.style.fontSize = '14px';
-        
-        const viewsLabelSpan = document.createElement('span');
-        viewsLabelSpan.textContent = 'Monthly Views: ';
-        viewsLabelSpan.style.color = '#000000';
-        
-        const viewsSpan = document.createElement('span');
-        viewsSpan.style.color = '#6273B4';
-        viewsSpan.textContent = viewsTextContent;
-        
-        viewsText.appendChild(viewsLabelSpan);
-        viewsText.appendChild(viewsSpan);
-        gameWindow.appendChild(viewsText);
-    } catch (error) {
-        console.error(`Error displaying monthly views for "${articleTitle}":`, error);
-        showPopup(`Failed to load monthly views for "${articleTitle}". Please try again.`);
-        const viewsText = document.createElement('p');
-        viewsText.style.textAlign = 'center';
-        viewsText.style.margin = '10px 0 0 0';
-        viewsText.style.fontFamily = 'Arial, sans-serif';
-        viewsText.style.fontSize = '14px';
-        viewsText.textContent = 'Monthly Views: Error';
-        gameWindow.appendChild(viewsText);
-    }
+    const viewsText = document.createElement('p');
+    viewsText.style.textAlign = 'center';
+    viewsText.style.margin = '10px 0 0 0';
+    viewsText.style.fontFamily = 'Arial, sans-serif';
+    viewsText.style.fontSize = '14px';
+    
+    const viewsLabelSpan = document.createElement('span');
+    viewsLabelSpan.textContent = 'Monthly Views: ';
+    viewsLabelSpan.style.color = '#000000';
+    
+    const viewsSpan = document.createElement('span');
+    viewsSpan.style.color = '#6273B4';
+    viewsSpan.textContent = await fetchAverageMonthlyViews(articleTitle);
+    
+    viewsText.appendChild(viewsLabelSpan);
+    viewsText.appendChild(viewsSpan);
+    gameWindow.appendChild(viewsText);
 
     // Add points earned text
     const pointsEarned = gameCsvData.find(data => data.article === articleTitle)?.pointsEarned || 0;
@@ -905,11 +862,9 @@ async function displayMainImage(articleTitle) {
     scoreText.appendChild(scoreSpan);
     gameWindow.appendChild(scoreText);
 
-    // Add blocks left text (always display, even if API calls fail)
-    console.log(`displayMainImage: blockLimit = ${blockLimit}, allBlocks.length = ${allBlocks.length}`);
+    // Add blocks left text
     const blocksLeft = blockLimit - allBlocks.length;
     const blocksText = document.createElement('p');
-    blocksText.className = 'blocks-left'; // Add a class for specific styling
     blocksText.style.textAlign = 'center';
     blocksText.style.margin = '10px 0 0 0';
     blocksText.style.fontFamily = 'Arial, sans-serif';
@@ -928,7 +883,6 @@ async function displayMainImage(articleTitle) {
     gameWindow.appendChild(blocksText);
 
     // Add "Visit Article" button if game is over
-    console.log(`Checking Visit Article button: allBlocks.length = ${allBlocks.length}, blockLimit = ${blockLimit}`);
     if (allBlocks.length === blockLimit) {
         const visitButton = document.createElement('button');
         visitButton.textContent = 'Visit Article';
@@ -954,12 +908,8 @@ async function displayMainImage(articleTitle) {
         });
         gameWindow.appendChild(visitButton);
     }
-
-    // Update the last displayed article
-    lastDisplayedArticle = articleTitle;
-
-    console.log(`displayMainImage finished, gameWindow content after: ${gameWindow.innerHTML}`);
 }
+
 // Function to fetch wikitext and check for hyperlinks bidirectionally
 async function checkWikitextForLink(subjectTitle, topicTitle) {
     const subjectUrl = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(subjectTitle)}&prop=wikitext&format=json&origin=*`;
@@ -1231,9 +1181,6 @@ function createNewBlock(text) {
     return newBlock;
 }
 
-
-
-
 // Handle user input on Enter key
 input.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter' && input.value.trim() !== '') {
@@ -1350,7 +1297,7 @@ input.addEventListener('keydown', async (e) => {
         displayMainImage(subjectTitle);
 
         // Check if block limit is reached
-        if (allBlocks.length === 11) {
+        if (allBlocks.length === blockLimit) {
             // Hide the text input box
             input.style.display = 'none';
             console.log('Game over: Text input box hidden');
@@ -1363,12 +1310,12 @@ input.addEventListener('keydown', async (e) => {
             const connectedCount = countBlocksConnectedToInitial();
             let penaltyPoints = 0;
             if (connectedCount < 3) {
-            const blocksUnderThreshold = 3 - connectedCount;
-            penaltyPoints = blocksUnderThreshold * -100;
-            console.log(`Applying penalty: ${penaltyPoints} points (${blocksUnderThreshold} blocks under threshold of 3)`);
-        }
+                const blocksUnderThreshold = 3 - connectedCount;
+                penaltyPoints = blocksUnderThreshold * -100;
+                console.log(`Applying penalty: ${penaltyPoints} points (${blocksUnderThreshold} blocks under threshold of 3)`);
+            }
 
-        const finalScore = totalScore + penaltyPoints;
+            const finalScore = totalScore + penaltyPoints;
             // Save game data to Firestore
             const gameData = {
                 userIdentifier: userIdentifier,
@@ -1387,12 +1334,12 @@ input.addEventListener('keydown', async (e) => {
                 .catch(error => {
                     console.error('Error saving game session to Firestore:', error);
                 });
-                // Log game complete event with final score
-    analytics.logEvent('game_complete', {
-        score: finalScore,
-        initial_block: initialBlockTitle,
-        user_id: currentUser ? currentUser.uid : userIdentifier
-    });
+            // Log game complete event with final score
+            analytics.logEvent('game_complete', {
+                score: finalScore,
+                initial_block: initialBlockTitle,
+                user_id: currentUser ? currentUser.uid : userIdentifier
+            });
             // Recalculate ranks for all sessions with the same initialBlock
             await recalculateRanks(initialBlockTitle);
 
@@ -1417,24 +1364,23 @@ input.addEventListener('keydown', async (e) => {
             message.style.margin = '0 0 10px 0';
             popup.appendChild(message);
 
-        // Add total score before penalty
-    const scoreText = document.createElement('p');
-    scoreText.style.margin = '0 0 5px 0';
-    scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
-    popup.appendChild(scoreText);
+            // Add total score before penalty
+            const scoreText = document.createElement('p');
+            scoreText.style.margin = '0 0 5px 0';
+            scoreText.innerHTML = `Total Score: <span style="color: #6273B4;">${totalScore}</span>`;
+            popup.appendChild(scoreText);
 
-    // Add penalty points in red
-    const penaltyText = document.createElement('p');
-    penaltyText.style.margin = '0 0 5px 0';
-    penaltyText.innerHTML = `Penalty Points: <span style="color: red;">${penaltyPoints}</span>`;
-    popup.appendChild(penaltyText);
+            // Add penalty points in red
+            const penaltyText = document.createElement('p');
+            penaltyText.style.margin = '0 0 5px 0';
+            penaltyText.innerHTML = `Penalty Points: <span style="color: red;">${penaltyPoints}</span>`;
+            popup.appendChild(penaltyText);
 
-    // Add final score after penalty
-    const finalScoreText = document.createElement('p');
-    finalScoreText.style.margin = '0 0 5px 0';
-    finalScoreText.innerHTML = `Final Score: <span style="color: #6273B4;">${finalScore}</span>`;
-    popup.appendChild(finalScoreText);
-            
+            // Add final score after penalty
+            const finalScoreText = document.createElement('p');
+            finalScoreText.style.margin = '0 0 5px 0';
+            finalScoreText.innerHTML = `Final Score: <span style="color: #6273B4;">${finalScore}</span>`;
+            popup.appendChild(finalScoreText);
 
             // Fetch the updated rank after recalculation
             let rank = 0;
@@ -1785,16 +1731,10 @@ document.getElementById('free-play-button').addEventListener('click', () => {
         dailyTopic = customTopic;
         // User input is the number of additional blocks; add 1 for the initial block
         blockLimit = parseInt(blockCountInput) + 1;
-        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit} (including initial block)`);
-
-        // Log blockLimit before resetGame
-        console.log(`Before resetGame: blockLimit = ${blockLimit}`);
+        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit} (including initial block), Blocks Left will start at ${blockLimit - 1}`);
 
         // Reset the game with the new settings
         await resetGame();
-
-        // Log blockLimit after resetGame
-        console.log(`After resetGame: blockLimit = ${blockLimit}`);
 
         // Close the popup
         popup.remove();
@@ -1833,5 +1773,3 @@ svg.addEventListener('mousemove', (e) => {
     startY = e.clientY;
     updateViewBox();
 });
-
-
