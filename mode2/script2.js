@@ -570,16 +570,25 @@ function generateGrid() {
                     const round = gameData?.round || 0;
                     const scores = gameData?.scores || { player1: { points: 0 }, player2: { points: 0 } };
                     const playerPoints = scores[playerNumber]?.points || 0;
-                    const canPlaceAnywhere = round <= 1 || (playerPoints >= 5 && confirm(`You have ${playerPoints} points. Use 5 points to place a block anywhere?`));
+                    const currentTurn = gameData?.currentTurn || 'player1';
+                    const isMyTurn = (currentTurn === 'player1' && gameData.players.player1 === currentUser.uid) ||
+                                     (currentTurn === 'player2' && gameData.players.player2 === currentUser.uid);
+
+                    if (!isMyTurn) {
+                        showPopup('It\'s not your turn!');
+                        return;
+                    }
+
+                    // Allow placement in any unfilled cell if usingFreeBlock is true
+                    const canPlaceAnywhere = round <= 1 || usingFreeBlock;
 
                     if (canPlaceAnywhere) {
-                        // First two blocks (round 0 or 1) or placing anywhere
                         if (selectedCell) {
                             selectedCell.classList.remove('selected');
                         }
                         cell.classList.add('selected');
                         selectedCell = cell;
-                        console.log(`Cell at row ${row}, col ${col} selected (first block or placing anywhere)`);
+                        console.log(`Cell at row ${row}, col ${col} selected (first block, free block, or placing anywhere)`);
                     } else {
                         // After the first two blocks, must be adjacent to the topic block
                         if (!currentTopicCell) {

@@ -64,6 +64,7 @@ let gameCsvData = [];
 let movableBlock = null; // For tracking the block being dragged
 let initialBlock = null; // Reference to the initial block
 let blockLimit = 11; // Default block limit for main game mode (10 blocks left after initial block)
+let isFreePlayMode = false; // Flag to indicate Free Play mode
 
 // Canvas dragging variables
 let isDragging = false;
@@ -1316,32 +1317,36 @@ input.addEventListener('keydown', async (e) => {
             }
 
             const finalScore = totalScore + penaltyPoints;
-            // Save game data to Firestore
-            const gameData = {
-                userIdentifier: userIdentifier,
-                isAnonymous: isAnonymous,
-                score: finalScore,
-                initialBlock: initialBlockTitle,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            // Save game data to Firestore only if not in Free Play mode
+            if (!isFreePlayMode) {
+                const gameData = {
+                    userIdentifier: userIdentifier,
+                    isAnonymous: isAnonymous,
+                    score: finalScore,
+                    initialBlock: initialBlockTitle,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
 
-            let gameSessionId;
-            await db.collection('gameSessions').add(gameData)
-                .then(docRef => {
-                    gameSessionId = docRef.id;
-                    console.log('Game session saved to Firestore with ID:', gameSessionId);
-                })
-                .catch(error => {
-                    console.error('Error saving game session to Firestore:', error);
+                let gameSessionId;
+                await db.collection('gameSessions').add(gameData)
+                    .then(docRef => {
+                        gameSessionId = docRef.id;
+                        console.log('Game session saved to Firestore with ID:', gameSessionId);
+                    })
+                    .catch(error => {
+                        console.error('Error saving game session to Firestore:', error);
+                    });
+                // Log game complete event with final score
+                analytics.logEvent('game_complete', {
+                    score: finalScore,
+                    initial_block: initialBlockTitle,
+                    user_id: currentUser ? currentUser.uid : userIdentifier
                 });
-            // Log game complete event with final score
-            analytics.logEvent('game_complete', {
-                score: finalScore,
-                initial_block: initialBlockTitle,
-                user_id: currentUser ? currentUser.uid : userIdentifier
-            });
-            // Recalculate ranks for all sessions with the same initialBlock
-            await recalculateRanks(initialBlockTitle);
+                // Recalculate ranks for all sessions with the same initialBlock
+                await recalculateRanks(initialBlockTitle);
+            } else {
+                console.log('Free Play mode: Game session not saved to Firestore');
+            }
 
             const popup = document.createElement('div');
             popup.style.position = 'fixed';
@@ -1382,23 +1387,23 @@ input.addEventListener('keydown', async (e) => {
             finalScoreText.innerHTML = `Final Score: <span style="color: #6273B4;">${finalScore}</span>`;
             popup.appendChild(finalScoreText);
 
-            // Fetch the updated rank after recalculation
-            let rank = 0;
-            let totalEntriesForTopic = 0;
-            await db.collection('gameSessions')
-                .doc(gameSessionId)
-                .get()
-                .then(doc => {
-                    if (doc.exists) {
-                        rank = doc.data().rank || 'N/A';
-                        totalEntriesForTopic = doc.data().totalEntriesForTopic || 'N/A';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching updated rank:', error);
-                    rank = 'N/A';
-                    totalEntriesForTopic = 'N/A';
-                });
+            // Fetch the updated rank after recalculation (only if not Free Play)
+            let rank = 'N/A';
+            let totalEntriesForTopic = 'N/A';
+            if (!isFreePlayMode) {
+                await db.collection('gameSessions')
+                    .doc(gameSessionId)
+                    .get()
+                    .then(doc => {
+                        if (doc.exists) {
+                            rank = doc.data().rank || 'N/A';
+                            totalEntriesForTopic = doc.data().totalEntriesForTopic || 'N/A';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching updated rank:', error);
+                    });
+            }
 
             const rankText = document.createElement('p');
             rankText.style.margin = '0 0 15px 0';
@@ -1731,7 +1736,8 @@ document.getElementById('free-play-button').addEventListener('click', () => {
         dailyTopic = customTopic;
         // User input is the number of additional blocks; add 1 for the initial block
         blockLimit = parseInt(blockCountInput) + 1;
-        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit} (including initial block), Blocks Left will start at ${blockLimit - 1}`);
+        isFreePlayMode = true; // Set Free Play mode
+        console.log(`Free Play started: Topic = ${dailyTopic}, Block Limit = ${blockLimit} (including initial block), Blocks Left will start at ${blockLimit - 1}, isFreePlayMode = ${isFreePlayMode}`);
 
         // Reset the game with the new settings
         await resetGame();
