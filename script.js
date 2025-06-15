@@ -1327,18 +1327,34 @@ input.addEventListener('keydown', async (e) => {
                     .then(docRef => {
                         gameSessionId = docRef.id;
                         console.log('Game session saved to Firestore with ID:', gameSessionId);
+
+                        // Fetch rank immediately within the same promise chain
+                        return db.collection('gameSessions')
+                            .doc(gameSessionId)
+                            .get()
+                            .then(doc => {
+                                let rank = 'N/A';
+                                let totalEntriesForTopic = 'N/A';
+                                if (doc.exists) {
+                                    rank = doc.data().rank || 'N/A';
+                                    totalEntriesForTopic = doc.data().totalEntriesForTopic || 'N/A';
+                                }
+                                return { rank, totalEntriesForTopic };
+                            });
+                    })
+                    .then(({ rank, totalEntriesForTopic }) => {
+                        // Log game complete event with final score
+                        analytics.logEvent('game_complete', {
+                            score: finalScore,
+                            initial_block: initialBlockTitle,
+                            user_id: userIdentifier
+                        });
+                        // Recalculate ranks for all sessions with the same initialBlock
+                        return recalculateRanks(initialBlockTitle);
                     })
                     .catch(error => {
-                        console.error('Error saving game session to Firestore:', error);
+                        console.error('Error saving game session or fetching rank:', error);
                     });
-                // Log game complete event with final score
-                analytics.logEvent('game_complete', {
-                    score: finalScore,
-                    initial_block: initialBlockTitle,
-                    user_id: currentUser ? currentUser.uid : userIdentifier
-                });
-                // Recalculate ranks for all sessions with the same initialBlock
-                await recalculateRanks(initialBlockTitle);
             } else {
                 console.log('Free Play mode: Game session not saved to Firestore');
             }
@@ -1382,22 +1398,29 @@ input.addEventListener('keydown', async (e) => {
             finalScoreText.innerHTML = `Final Score: <span style="color: #6273B4;">${finalScore}</span>`;
             popup.appendChild(finalScoreText);
 
-            // Fetch the updated rank after recalculation (only if not Free Play)
+            // Use rank and totalEntriesForTopic from the promise chain if available
             let rank = 'N/A';
             let totalEntriesForTopic = 'N/A';
             if (!isFreePlayMode) {
-                await db.collection('gameSessions')
+                // This will be set from the previous .then block if Firestore save succeeded
+                const rankData = await db.collection('gameSessions')
                     .doc(gameSessionId)
                     .get()
                     .then(doc => {
                         if (doc.exists) {
-                            rank = doc.data().rank || 'N/A';
-                            totalEntriesForTopic = doc.data().totalEntriesForTopic || 'N/A';
+                            return {
+                                rank: doc.data().rank || 'N/A',
+                                totalEntriesForTopic: doc.data().totalEntriesForTopic || 'N/A'
+                            };
                         }
+                        return { rank: 'N/A', totalEntriesForTopic: 'N/A' };
                     })
                     .catch(error => {
-                        console.error('Error fetching updated rank:', error);
+                        console.error('Error fetching rank data:', error);
+                        return { rank: 'N/A', totalEntriesForTopic: 'N/A' };
                     });
+                rank = rankData.rank;
+                totalEntriesForTopic = rankData.totalEntriesForTopic;
             }
 
             const rankText = document.createElement('p');
