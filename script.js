@@ -1233,19 +1233,15 @@ input.addEventListener('keydown', async (e) => {
             const topicViews = parseFloat(topicViewsStr.replace(/,/g, ''));
             if (topicViews > 0) {
                 baseRatio = subjectViews / topicViews;
-                // Get topic block’s Ratio from gameCsvData
                 const topicData = gameCsvData.find(data => data.article === topicText);
-                const topicRatio = topicData ? topicData.ratio : 1; // Default to 1 if not found
-                // Conditionally adjust the ratio based on the previous block's ratio
+                const topicRatio = topicData ? topicData.ratio : 1;
                 if (topicRatio > 1) {
-                    adjustedRatio = baseRatio; // Do not multiply if previous ratio is greater than 1
+                    adjustedRatio = baseRatio;
                     console.log(`Previous ratio ${topicRatio} > 1, using base ratio: ${baseRatio}`);
                 } else {
-                    adjustedRatio = baseRatio * topicRatio; // Multiply if previous ratio is <= 1
+                    adjustedRatio = baseRatio * topicRatio;
                     console.log(`Previous ratio ${topicRatio} <= 1, multiplying: Base Ratio=${baseRatio}, Topic Ratio=${topicRatio}, Adjusted Ratio=${adjustedRatio}`);
                 }
-                
-                // Award points based on adjusted Ratio
                 if (adjustedRatio > 1) points = 1;
                 else if (adjustedRatio > 0.95) points = 2;
                 else if (adjustedRatio > 0.90) points = 3;
@@ -1269,7 +1265,6 @@ input.addEventListener('keydown', async (e) => {
                 else if (adjustedRatio > 0.025) points = 83;
                 else if (adjustedRatio > 0.01) points = 91;
                 else if (adjustedRatio > 0) points = 100;
-                
                 totalScore += points;
                 lastBlockPoints = points;
                 console.log(`Points awarded: ${points}, Total Score: ${totalScore}, Last Block Points: ${lastBlockPoints}`);
@@ -1286,18 +1281,18 @@ input.addEventListener('keydown', async (e) => {
         const views = subjectViewsStr !== 'N/A' ? parseFloat(subjectViewsStr.replace(/,/g, '')) : 0;
         gameCsvData.push({
             article: subjectTitle,
-            ratio: baseRatio || 0, // Store base Ratio
+            ratio: baseRatio || 0,
             pointsEarned: points,
             views: views
         });
         console.log('Updated CSV:', generateCsvContent());
 
         const newBlock = createNewBlock(subjectTitle);
-        allBlocks.push(newBlock); // Add the new block to allBlocks
-        // Update game window for new topic block
+        allBlocks.push(newBlock);
         displayMainImage(subjectTitle);
 
         // Check if block limit is reached
+        console.log(`Checking game over: allBlocks.length = ${allBlocks.length}, blockLimit = ${blockLimit}`);
         if (allBlocks.length === blockLimit) {
             // Hide the text input box
             input.style.display = 'none';
@@ -1306,7 +1301,7 @@ input.addEventListener('keydown', async (e) => {
             // Generate a unique identifier for anonymous users
             const userIdentifier = currentUser ? currentUser.uid : generateUniqueId();
             const isAnonymous = !currentUser;
-            const initialBlockTitle = gameCsvData[0].article; // Initial block title (e.g., "Wright brothers")
+            const initialBlockTitle = gameCsvData[0]?.article || 'Unknown'; // Fallback if undefined
             // Calculate penalty for insufficient connections to initial block
             const connectedCount = countBlocksConnectedToInitial();
             let penaltyPoints = 0;
