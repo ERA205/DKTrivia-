@@ -274,6 +274,7 @@ getDailyTopic().then(topic => {
 });
 
 
+
 // Block properties
 const initialWidth = 1243;
 const initialHeight = 477;
@@ -1713,11 +1714,9 @@ document.getElementById('profile-button').addEventListener('click', () => {
 });
 
 // Handle Daily Play button click
-document.getElementById('daily-play-button').addEventListener('click', async () => {
-    isFreePlayMode = false; // Ensure Daily Play mode
-    blockLimit = 11; // Reset to default block limit for Daily Play
-    await initializeDailyGame(); // Reinitialize the game for Daily Play
-    console.log('Daily Play mode started');
+document.getElementById('daily-play-button').addEventListener('click', () => {
+    window.location.reload();
+    console.log('Page refreshed to start Daily Play mode');
 });
 
 // Handle Free Play button click
