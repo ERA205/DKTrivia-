@@ -1712,6 +1712,14 @@ document.getElementById('profile-button').addEventListener('click', () => {
     document.body.appendChild(popup);
 });
 
+// Handle Daily Play button click
+document.getElementById('daily-play-button').addEventListener('click', async () => {
+    isFreePlayMode = false; // Ensure Daily Play mode
+    blockLimit = 11; // Reset to default block limit for Daily Play
+    await initializeDailyGame(); // Reinitialize the game for Daily Play
+    console.log('Daily Play mode started');
+});
+
 // Handle Free Play button click
 document.getElementById('free-play-button').addEventListener('click', () => {
     const popup = document.createElement('div');
