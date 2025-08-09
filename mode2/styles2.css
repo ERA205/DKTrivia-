@@ -63,15 +63,14 @@ body {
 
 #grid-container {
     position: fixed;
-    top: 55%; /* Adjusted from 50% to lower the grid (5% downward shift) */
+    top: 55%;
     left: 50%;
     transform: translate(-50%, -50%);
     display: grid;
-    grid-template-columns: repeat(5, 100px);
-    grid-template-rows: repeat(5, 100px);
     gap: 2px;
     z-index: 10;
-    width: 510px; /* Explicitly set to ensure layout */
+    width: 510px;
+    height: 510px;
 }
 
 #main-svg {
@@ -81,24 +80,22 @@ body {
     top: 55%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 15; /* Increased to be above grid cells (z-index: 10) */
+    z-index: 15;
     pointer-events: none;
 }
 
 #line-group {
-    z-index: 20; /* Still above #main-svg, but relative to parent */
+    z-index: 20;
     pointer-events: none;
 }
 
 .grid-cell {
-    width: 100px;
-    height: 100px;
     background-color: #e0e0e0;
     border: 1px solid #6273B4;
     cursor: pointer;
     box-sizing: border-box;
     position: relative;
-    z-index: 10; /* Below #main-svg */
+    z-index: 10;
 }
 
 .connection-node {
@@ -110,15 +107,15 @@ body {
     transform: translate(-50%, -50%);
     background-color: #333333;
     border-radius: 50%;
-    z-index: 30; /* Above lines */
+    z-index: 30;
 }
 
 .grid-cell.filled.player1 {
-    background-color: #1E90FF; /* Dodger Blue for Player 1 */
+    background-color: #1E90FF;
 }
 
 .grid-cell.filled.player2 {
-    background-color: #FF4500; /* Orange Red for Player 2 */
+    background-color: #FF4500;
 }
 
 .grid-cell.selected {
@@ -180,4 +177,9 @@ body {
     font-size: 14px;
     border: 1px solid #6273B4;
     border-radius: 5px;
+}
+
+#grid-size-select {
+    padding: 5px;
+    font-size: 16px;
 }
