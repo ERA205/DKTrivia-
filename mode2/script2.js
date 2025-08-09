@@ -58,17 +58,97 @@ function generateGameId() {
 }
 
 // Function to show a popup message
-function showPopup(message, additionalContent = null) {
+function showPopup(message, additionalContent = '') {
     const popup = document.createElement('div');
     popup.className = 'popup';
     popup.innerHTML = `
         <p>${message}</p>
-        ${additionalContent || ''}
+        ${additionalContent}
         <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Close</button>
     `;
     popup.querySelector('button').addEventListener('click', () => popup.remove());
     document.body.appendChild(popup);
     return popup;
+}
+
+// Function to show the initial game start popup
+function showInitialPopup() {
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    popup.innerHTML = `
+        <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Welcome to Deep Knowledge Trivia - Mode 2</p>
+        <p>Choose an option to begin:</p>
+        <button id="start-new-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 10px;">Start New Game</button>
+        <button id="join-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 10px;">Join Game</button>
+        <button id="how-to-play-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 10px;">How to Play</button>
+        <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Close</button>
+    `;
+    const startNewGameButton = popup.querySelector('#start-new-game-button');
+    const joinGameButton = popup.querySelector('#join-game-button');
+    const howToPlayButton = popup.querySelector('#how-to-play-button');
+    const closeButton = popup.querySelector('button:last-child');
+
+    // Start New Game
+    startNewGameButton.addEventListener('click', () => {
+        startNewGame();
+        popup.remove();
+    });
+
+    // Join Game
+    joinGameButton.addEventListener('click', () => {
+        popup.remove();
+        showJoinGamePopup();
+    });
+
+    // How to Play
+    howToPlayButton.addEventListener('click', () => {
+        popup.remove();
+        showPopup(
+            'How to Play Territory 1 v 1',
+            `
+            <p style="text-align: left; margin-bottom: 20px;">
+                1. Share the game link with a friend to start a multiplayer game.<br>
+                2. Take turns placing blocks on the grid by connecting Wikipedia articles.<br>
+                3. Each block must be placed adjacent to the current topic block.<br>
+                4. Use the "Free Block" option to place a block anywhere (once per game).<br>
+                5. Concede a turn if you can't make a move, but two consecutive concessions end the game.<br>
+                6. Capture opponent cells by surrounding them to gain more territory.<br>
+                7. The game ends when the grid is full or after two consecutive concessions.<br>
+                8. The player with the most cells wins!<br>
+            </p>
+            `
+        );
+    });
+
+    // Close
+    closeButton.addEventListener('click', () => popup.remove());
+    document.body.appendChild(popup);
+}
+
+// Function to show the join game popup
+function showJoinGamePopup() {
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    popup.innerHTML = `
+        <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">Join a Game</p>
+        <div style="text-align: left; padding: 0 20px;">
+            <label for="game-id-input">Game ID:</label><br>
+            <input type="text" id="game-id-input" style="width: 100%; margin-bottom: 15px; padding: 5px;" placeholder="Enter Game ID"><br>
+        </div>
+        <button id="submit-join-game-button" style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">Join Game</button>
+        <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
+    `;
+    popup.querySelector('#submit-join-game-button').addEventListener('click', () => {
+        const gameIdInput = popup.querySelector('#game-id-input').value.trim();
+        if (!gameIdInput) {
+            showPopup('Please enter a Game ID.');
+            return;
+        }
+        joinGame(gameIdInput);
+        popup.remove();
+    });
+    popup.querySelector('button:last-child').addEventListener('click', () => popup.remove());
+    document.body.appendChild(popup);
 }
 
 // Function to show the sharable link popup
@@ -82,7 +162,7 @@ function showShareLinkPopup(gameId) {
 // Function to generate the grid dynamically
 function generateGrid() {
     gridContainer.innerHTML = '';
-    const cellSize = 510 / gridSize; // Calculate cell size to fit 510px
+    const cellSize = 510 / gridSize;
     gridContainer.style.gridTemplateColumns = `repeat(${gridSize}, ${cellSize}px)`;
     gridContainer.style.gridTemplateRows = `repeat(${gridSize}, ${cellSize}px)`;
 
@@ -251,7 +331,8 @@ function startNewGame() {
 }
 
 // Function to join an existing game
-function joinGame(gameId) {
+function joinGame(gameIdInput) {
+    gameId = gameIdInput;
     gameRef = database.ref(`territory_games/${gameId}`);
     gameRef.once('value').then((snapshot) => {
         const gameData = snapshot.val();
@@ -406,25 +487,13 @@ async function fetchMainImage(articleTitle) {
     try {
         const response = await fetch(url);
         const data = await response.json();
-        console.log(`API Response for "${articleTitle}" thumbnail:`, data);
-        
         const pages = data.query.pages;
         const pageId = Object.keys(pages)[0];
-        
-        if (pageId === '-1') {
-            console.log(`Page not found for "${articleTitle}"`);
-            return null;
-        }
-        
-        const page = pages[pageId];
-        if (!page.thumbnail || !page.thumbnail.source) {
+        if (pageId === '-1' || !pages[pageId].thumbnail) {
             console.log(`No thumbnail available for "${articleTitle}"`);
             return null;
         }
-        
-        const thumbnailUrl = page.thumbnail.source;
-        console.log(`Thumbnail URL for "${articleTitle}": ${thumbnailUrl}`);
-        return thumbnailUrl;
+        return pages[pageId].thumbnail.source;
     } catch (error) {
         console.error(`Error fetching image for "${articleTitle}":`, error);
         return null;
@@ -447,10 +516,8 @@ async function fetchAverageMonthlyViews(articleTitle) {
             const days = data.items.length;
             const averageDailyViews = totalViews / days;
             const averageMonthlyViews = Math.round(averageDailyViews * 30.42);
-            console.log(`Average monthly views for "${articleTitle}": ${averageMonthlyViews}`);
             return { formatted: averageMonthlyViews.toLocaleString(), raw: averageMonthlyViews };
         }
-        console.log(`No view data for "${articleTitle}"`);
         return { formatted: 'N/A', raw: 0 };
     } catch (error) {
         console.error(`Error fetching views for "${articleTitle}":`, error);
@@ -611,7 +678,7 @@ input.addEventListener('keydown', async (e) => {
         console.log(`User entered: ${userInput}`);
 
         if (!selectedCell) {
-            showPopup('Please Select a Grid Location');
+            showPopup('Please select a grid location.');
             input.value = '';
             return;
         }
@@ -894,35 +961,6 @@ input.addEventListener('keydown', async (e) => {
     }
 });
 
-// Handle banner button popups
-document.getElementById('how-to-play-button').addEventListener('click', () => {
-    const popup = document.createElement('div');
-    popup.className = 'popup';
-    popup.innerHTML = `
-        <p style="font-weight: bold; font-size: 18px; margin-bottom: 15px;">How to Play Territory 1 v 1</p>
-        <p style="text-align: left; margin-bottom: 20px;">
-            1. Share the game link with a friend to start a multiplayer game.<br>
-            2. Take turns placing blocks on the grid by connecting Wikipedia articles.<br>
-            3. Each block must be placed adjacent to the current topic block.<br>
-            4. The game ends when the grid is full.<br>
-            5. The player with the most blocks wins!<br>
-            <a href="../index.html">Back to Main Game</a>
-        </p>
-        <button style="background-color: #6273B4; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
-    `;
-    popup.querySelector('button').addEventListener('click', () => popup.remove());
-    document.body.appendChild(popup);
-});
-
-// Handle "Start Game" button click
-startGameButton.addEventListener('click', () => {
-    if (!currentUser) {
-        showPopup('Please wait, signing in...');
-        return;
-    }
-    startNewGame();
-});
-
 // Handle grid size change
 gridSizeSelect.addEventListener('change', () => {
     if (!gameStarted) {
@@ -934,28 +972,37 @@ gridSizeSelect.addEventListener('change', () => {
     }
 });
 
-// Initialize Firebase Authentication and start/join game
+// Handle banner button popups
+document.getElementById('how-to-play-button').addEventListener('click', () => {
+    showPopup(
+        'How to Play Territory 1 v 1',
+        `
+        <p style="text-align: left; margin-bottom: 20px;">
+            1. Share the game link with a friend to start a multiplayer game.<br>
+            2. Take turns placing blocks on the grid by connecting Wikipedia articles.<br>
+            3. Each block must be placed adjacent to the current topic block.<br>
+            4. Use the "Free Block" option to place a block anywhere (once per game).<br>
+            5. Concede a turn if you can't make a move, but two consecutive concessions end the game.<br>
+            6. Capture opponent cells by surrounding them to gain more territory.<br>
+            7. The game ends when the grid is full or after two consecutive concessions.<br>
+            8. The player with the most cells wins!<br>
+        </p>
+        `
+    );
+});
+
+// Initialize Firebase Authentication and show initial popup
 auth.onAuthStateChanged((user) => {
     if (user) {
         currentUser = user;
         console.log('Signed in anonymously:', currentUser.uid);
-
-        setTimeout(() => {
-            const urlParams = new URLSearchParams(window.location.search);
-            gameId = urlParams.get('gameId');
-
-            if (gameId) {
-                joinGame(gameId);
-            }
-        }, 1000);
+        // Show initial popup instead of checking URL or showing start button
+        showInitialPopup();
     } else {
         auth.signInAnonymously().catch((error) => {
             console.error('Error signing in anonymously:', error);
             showPopup('Error signing in. Please try again.');
         });
-        if (!gameId) {
-            startGameButton.style.display = 'block';
-        }
     }
 });
 
